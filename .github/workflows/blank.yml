@@ -1,0 +1,212 @@
+##load libraries, data
+```{r}
+library(tidyverse)
+library(lubridate)
+library(haven)
+library(readxl)
+
+data <- read_sas("cand_kipa24.sas7bdat")
+```
+
+##set cohort - start and end dates, kidney (+/- pancreas) only, adults only
+
+```{r}
+start_date <- as.Date('2014-01-01')
+end_date <- as.Date('2022-12-31')
+filt_date <- data %>% filter(between(CAN_LISTING_DT, start_date, end_date))
+filt_date_KIKP <- filt_date %>% filter(WL_ORG %in% c("KI", "KP"))
+filt_date_KIKP %>% filter(CAN_AGE_AT_LISTING < 18) ##pediatric candidates
+filt_date_KIKP_adult <- filt_date_KIKP %>% filter(CAN_AGE_AT_LISTING >= 18)
+
+rm(filt_date, filt_date_KIKP, data)
+```
+
+##from here down based on Kevin Zhang's code
+##establish waitlist_end_date - transplant date, removal date, last inactive date (if after last active date), last active date
+
+```{r}
+df_cand_kipa <- filt_date_KIKP_adult %>% ##df_cand_kipa has same cohort, adds waitlist_end_date column
+  mutate(waitlist_end_date = case_when(
+    is.na(REC_TX_DT) == FALSE ~ REC_TX_DT, ##look at transplant date first
+    is.na(CAN_REM_DT) == FALSE ~ CAN_REM_DT, ##then look at removal date
+    is.na(CAN_LAST_INACT_STAT_DT) == FALSE & CAN_LAST_INACT_STAT_DT > CAN_LAST_ACT_STAT_DT ~ CAN_LAST_INACT_STAT_DT,##then inactive date if after last active date
+    !is.na(CAN_LAST_ACT_STAT_DT) ~ CAN_LAST_ACT_STAT_DT, ##then last active
+    is.na(CAN_LAST_ACT_STAT_DT) & !is.na(CAN_LAST_INACT_STAT_DT) ~ CAN_LAST_INACT_STAT_DT,
+    TRUE ~ CAN_LAST_ACT_STAT_DT)) ##if all else fails, use last active date
+
+rm(filt_date_KIKP_adult)
+```
+
+##single registrations - new columns num_list, min_list_date, wait_time, outcome
+
+```{r}
+single_registrations <- df_cand_kipa %>%
+  group_by(PERS_ID) %>% ##grouping by PERS_ID
+  mutate(num_list = n()) %>%
+  filter(num_list == 1) %>%
+  ungroup() %>%
+  mutate(min_list_date = min(CAN_LISTING_DT),  
+         wait_time = waitlist_end_date - min_list_date, ##using end dates established in last code chunk
+         outcome = case_when(
+           DON_TY == "C" ~ "DDKT",
+           DON_TY == "L" ~ "LDKT",
+           !is.na(CAN_REM_CD) ~ "removed/died",  ##do we want all other CAN_REM_CD codes here? or just 8 and 13 (like used to define the outcome below)
+           TRUE ~ "censored"
+         ))
+
+single_registrations %>%
+  select(CAN_LISTING_DT, min_list_date, CAN_REM_DT, CAN_REM_CD, REC_TX_DT, waitlist_end_date, wait_time, outcome) %>%
+  count(outcome)
+```
+
+##multiple registrations - new columns num_list, list_type (concurrent or sequential), num_tx; fills missing REC_TX_DT
+
+```{r}
+multiple_registrations <- df_cand_kipa %>%
+  filter(!PX_ID %in% single_registrations$PX_ID) %>%
+  group_by(PERS_ID) %>%
+  arrange(PERS_ID, CAN_LISTING_DT) %>%
+  mutate(num_list = n())
+
+candidates_w_multiple_registrations <- multiple_registrations %>% pull(PERS_ID) %>% unique() %>% length() ##number of candidates with multiple registrations
+
+avg_num_registrations_multiple <- mean(multiple_registrations %>% group_by(PERS_ID) %>% filter(row_number() == 1) %>% pull(num_list)) ##for candidates with multiple registrations, the average number of registrations
+
+multiple_registrations <- multiple_registrations %>%
+  mutate(list_type = case_when(
+    CAN_LISTING_DT < lag(waitlist_end_date) ~ "concurrent",
+    waitlist_end_date > lead(CAN_LISTING_DT) ~ "concurrent",
+    TRUE ~ "sequential")) %>%
+  mutate(REC_TX_DT = as.Date(REC_TX_DT)) %>%
+  mutate(num_tx = length(unique(na.omit(REC_TX_DT)))) %>%
+  fill(REC_TX_DT, .direction='downup')
+```
+
+```{r}
+multiple_registrations <- multiple_registrations[order(multiple_registrations$PERS_ID, multiple_registrations$waitlist_end_date), ] ##orders by PERS_ID then waitlist_end_date
+
+##multiple registrations - number sequential transplants, correct concurrent listing transplant dates
+
+multiple_registrations$transplant_num <- 1 ##new column transplant_num, setting all at 1 for now
+for (i in 2:nrow(multiple_registrations)) {
+  if (!is.na(multiple_registrations$PERS_ID[i-1]) && 
+      !is.na(multiple_registrations$PERS_ID[i]) && 
+      !is.na(multiple_registrations$REC_TX_DT[i-1]) && 
+      !is.na(multiple_registrations$REC_TX_DT[i]) &&
+      multiple_registrations$PERS_ID[i-1] == multiple_registrations$PERS_ID[i] &&
+      multiple_registrations$REC_TX_DT[i-1] != multiple_registrations$REC_TX_DT[i]) {
+    
+    multiple_registrations$transplant_num[i] = multiple_registrations$transplant_num[i-1] + 1
+  }
+}
+
+for (i in 2:nrow(multiple_registrations)) {
+  if (!is.na(multiple_registrations$PERS_ID[i-1]) && 
+      !is.na(multiple_registrations$PERS_ID[i]) && 
+      multiple_registrations$PERS_ID[i-1] == multiple_registrations$PERS_ID[i] &&
+      !is.na(multiple_registrations$transplant_num[i-1]) && 
+      multiple_registrations$transplant_num[i-1] != multiple_registrations$transplant_num[i] &&
+      multiple_registrations$transplant_num[i-1] != 1) {
+    
+    multiple_registrations$transplant_num[i] = multiple_registrations$transplant_num[i-1]
+  }
+}
+
+multiple_registrations$transplant_num[multiple_registrations$list_type == 'sequential'] <- 0 ##when list_type is sequential, transplant_num is set to 0. I still don't understand this step either.
+
+for(i in 1:(nrow(multiple_registrations)-1)) { ##loop from second to lat row
+  if(multiple_registrations$PERS_ID[i] == multiple_registrations$PERS_ID[i+1] &
+     multiple_registrations$list_type[i] == 'concurrent' & multiple_registrations$list_type[i+1] == 'concurrent' &
+     !is.na(multiple_registrations$REC_TX_DT[i]) & !is.na(multiple_registrations$REC_TX_DT[i+1]) &
+     multiple_registrations$REC_TX_DT[i] < multiple_registrations$REC_TX_DT[i+1] ) {
+    
+    multiple_registrations$REC_TX_DT[i] <- multiple_registrations$REC_TX_DT[i+1] ##if PERS_ID is the same as the NEXT row, both have concurrent listings, transplant dates for both are not NA, and transplant date is earlier than the next row's transplant date - update to next row's transplant date
+  }}
+
+sequential_lists <- multiple_registrations %>%
+  filter(list_type == "sequential") %>%
+  mutate(min_list_date = CAN_LISTING_DT,
+         wait_time = waitlist_end_date - min_list_date,
+         outcome = case_when(
+           DON_TY == "C" ~ "DDKT",
+           DON_TY == "L" ~ "LDKT",
+           is.na(CAN_REM_CD) == FALSE ~ "removed/died", ##again, should this be all CAN_REM_CD? or just 8 and 13 (since we included the rest in censored)
+           TRUE ~ "censored"
+         ))  ##same thing as done above for single registrations
+
+max_retransplants <- max(multiple_registrations$transplant_num) ##highest number of transplants for a single person
+
+multiple_registrations <- multiple_registrations %>% ##for candidates with multiple registrations, adds columns min_list_date, wait_time
+  group_by(PERS_ID, transplant_num) %>%
+  mutate(min_list_date = min(CAN_LISTING_DT, na.rm=T),
+         wait_time = waitlist_end_date - min_list_date)
+
+multiple_registrations <- multiple_registrations %>% mutate
+
+collapsed_concurrent_registrations <- NULL ##establishes object to store coming data
+for(i in 1:max_retransplants) { ##loop from first row to max_transplants
+  
+  collapsed_concurrent_registrations <- rbind(collapsed_concurrent_registrations, 
+        
+  multiple_registrations %>%
+    filter(list_type == "concurrent" & transplant_num == i) %>% ##filters for concurrent listings where translpant_num is equal to current value of i (?)
+    mutate(DON_TY = ifelse(DON_TY == "", NA, DON_TY),
+           last_wait_date = max(waitlist_end_date, na.rm = TRUE)) %>% ##if DON_TY is empty, fill with NA, set last_wait_date to waitlist_end_date (why?)
+    fill(REC_TX_DT, .direction = "up") %>%
+    fill(DON_TY, .direction = "up") %>%
+    fill(DONOR_ID, .direction = "up") %>%
+    fill(CAN_REM_CD, .direction = "up") %>% ##fills missing values upwards
+    mutate(wait_time = case_when(
+      is.na(REC_TX_DT) == FALSE & transplant_num != '0' ~ REC_TX_DT- min_list_date, ### Ignore non-transplanted rows
+      TRUE ~ last_wait_date - min_list_date),
+      outcome = case_when(
+        DON_TY == "C" ~ "DDKT",
+        DON_TY == "L" ~ "LDKT",
+        is.na(CAN_REM_CD) == FALSE ~ "removed/died", ##same question - CAN_REM_CD should be all? or just 8, 13?
+        TRUE ~ "censored")   ##does the same we already did for single registrations and sequential listings
+    ) %>%
+    select(-c(waitlist_end_date, CAN_LISTING_DT, CAN_REM_DT)) %>% ##drops columns waitlist_end_date, CAN_LISTING_DT, CAN_REM_DT (just for cleanliness?)
+    filter(row_number() ==1) %>% ##for concurrent listings, keeps only first row 
+    
+    mutate(last_wait_date = case_when(
+      REC_TX_DT < last_wait_date ~ REC_TX_DT,
+      TRUE ~last_wait_date)))}
+```
+
+##recreate CAN_LISTING_DT - to fix issue of NA values later on
+
+```{r}
+collapsed_concurrent_registrations <- collapsed_concurrent_registrations %>% mutate(CAN_LISTING_DT = min_list_date)
+```
+
+##recombine separated data frames
+
+```{r}
+df_cand_kipa <- bind_rows(single_registrations %>% ungroup(), 
+                          sequential_lists %>% ungroup(), 
+                          collapsed_concurrent_registrations %>% ungroup()) ##puts data all back together
+
+df_cand_kipa %>% filter(is.na(CAN_LISTING_DT))
+```
+
+##establish final data frames. 3 outcomes = received deceased donor kidney transplant (unique_transplant), died or removed due to deterioration (rem_death_deterioration), censored (censored_total) 
+
+```{r}
+unique_candidates <- df_cand_kipa %>% pull(PERS_ID) %>% n_distinct()
+
+unique_listings <- df_cand_kipa %>% nrow()
+
+unique_transplant <- df_cand_kipa %>% filter(outcome == "DDKT")
+
+rem_death_deterioration <- df_cand_kipa %>% filter(outcome == "removed/died") %>% filter(CAN_REM_CD %in% c(8, 13)) ##fixes my previous questions by only including 8 and 13 from removed/died classification
+
+censored_total <- df_cand_kipa %>% filter(outcome %in% c("removed/died", "censored", "LDKT")) %>% filter(!(CAN_REM_CD %in% c(8, 13)) | (outcome == "LDKT"))
+```
+
+```{r}
+ldkt <- df_cand_kipa %>% filter(outcome == "LDKT")
+
+rem_other_reason <- df_cand_kipa %>% filter(outcome %in% c("censored", "removed/died")) %>% filter(!(CAN_REM_CD %in% c(8,13)))
+
+rm(collapsed_concurrent_registrations, sequential_lists, single_registrations, i)
+```
