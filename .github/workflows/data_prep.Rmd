@@ -998,41 +998,112 @@ grViz(dot_code)
 ```
 
 ```{r}
-unique_transplant <- unique_transplant %>% mutate(age_mean = mean(unique_transplant, na.rm = TRUE))
-unique_transplant <- unique_transplant %>% mutate(age_sd = sd(unique_transplant, na.rm = TRUE))
+table(df_cand_kipa_w_scores$status)
+```
+
+```{r}
+library(gtsummary)
+library(dplyr)
+
+# Define a function to specify statistics for percentile variables
+custom_summary_function <- function(data, ...) {
+  tbl_summary(
+    data,
+    by = status,
+    include = c(CAN_AGE_AT_LISTING, CAN_GENDER, CAN_RACE_SRTR, CAN_ETHNICITY_SRTR,
+                SVM_PERCENTILE, SVI_percentile, ADI_percentile, dci_percentile),
+    statistic = list(
+      all_continuous() ~ "{mean} ({sd})",  # Show mean and SD for continuous variables
+      all_categorical() ~ "{n} ({p}%)"     # Show count and percentage for categorical variables
+    )
+  )
+}
+
+# Create the summary table with custom statistics
+summary_table <- custom_summary_function(df_cand_kipa_w_scores)
+
+# Print the summary table
+print(summary_table)
+```
+
+```{r}
+library(gtsummary)
+library(dplyr)
+
+# Clean dataset by removing rows with NA values in the percentile columns
+df_cand_kipa_w_scores_clean <- df_cand_kipa_w_scores %>%
+  filter(!is.na(SVM_PERCENTILE) & !is.na(SVI_percentile) &
+         !is.na(ADI_percentile) & !is.na(dci_percentile))
+
+##need to figure out why these are NA
+
+# Create the summary table with custom statistics
+summary_table <- df_cand_kipa_w_scores_clean %>%
+  tbl_summary(
+    by = status,  # Specify the grouping variable
+    statistic = list(
+      # Specify mean and standard deviation for the percentile columns
+      all_continuous() ~ "{mean} ({sd})",
+      # You can also specify statistics for other variables if needed
+      SVM_PERCENTILE ~ "{mean} ({sd})",
+      SVI_percentile ~ "{mean} ({sd})",
+      ADI_percentile ~ "{mean} ({sd})",
+      dci_percentile ~ "{mean} ({sd})"
+    ),
+    include = c(CAN_AGE_AT_LISTING, CAN_GENDER, CAN_RACE_SRTR, CAN_ETHNICITY_SRTR, SVM_PERCENTILE, SVI_percentile, ADI_percentile, dci_percentile)
+  )
+
+# Print the summary table
+print(summary_table)
+
+```
+
+```{r}
+# Filter out candidates with no label in CAN_RACE_SRTR
+df_cand_kipa_w_scores %>%
+  filter(CAN_RACE_SRTR == "")
+
+censored_total %>% filter(PX_ID == 1170333)
+censored_total %>% filter(PX_ID == 1452643)
 ```
 
 
 ```{r}
-mean(rem_death_deterioration$CAN_AGE_AT_LISTING, na.rm = TRUE)
-sd(rem_death_deterioration$CAN_AGE_AT_LISTING, na.rm = TRUE)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
 
-mean(censored_total$CAN_AGE_AT_LISTING, na.rm = TRUE)
-sd(censored_total$CAN_AGE_AT_LISTING, na.rm = TRUE)
+# Filter out candidates with no label in CAN_RACE_SRTR
+df_filtered <- df_cand_kipa_w_scores %>%
+  filter(!is.na(CAN_RACE_SRTR) & CAN_RACE_SRTR != "")
+
+# Reshape data to long format for visualization
+df_long <- df_filtered %>%
+  pivot_longer(cols = c(CAN_GENDER, CAN_RACE_SRTR, CAN_ETHNICITY_SRTR), 
+               names_to = "Variable", 
+               values_to = "Value")
+
+# Calculate percentages within each category
+df_long_percent <- df_long %>%
+  group_by(status, Variable, Value) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  group_by(Variable, Value) %>%
+  mutate(Percentage = Count / sum(Count) * 100) %>%
+  ungroup()
+
+# Create the plot
+plot <- ggplot(df_long_percent, aes(x = Value, y = Percentage, fill = status)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~ Variable, scales = "free") +
+  labs(title = "Distribution of Variables by Outcome",
+       x = "Value",
+       y = "Percentage") +
+  theme_minimal()
+
+# Save the plot to a file
+ggsave("plot_distribution_by_outcome.png", plot = plot, width = 10, height = 6, dpi = 300)
+
 ```
 
-```{r}
-library(flextable)
-
-# Create a data frame
-my_table <- data.frame(
-  Column1 = c("Age at listing, mean(SD)", "Sex, n(%)", "Male", "Female", "Race, n(%)", "Hispanic/Latino, n(%)", "SVM Percentile, mean(SD)", "SVI Percentile, mean(SD)", "ADI Percentile, mean(SD)", "DCI Percentile, mean(SD)"),
-  Column2 = c(10, 20, 30, 40, 50, 60, 70, 80, 90, 100),
-  Column3 = c(TRUE, FALSE, TRUE, TRUE, FALSE, TRUE, TRUE, FALSE, TRUE, FALSE),
-  Column4 = c(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
-)
-
-# Create a flextable
-ft <- flextable(my_table)
-
-# Customize the table
-ft <- set_table_properties(ft, width = 1, layout = "autofit")
-ft <- set_header_labels(ft, Column1 = "", Column2 = "Received Transplant (n = 122,524)", Column3 = "Died / Removed due to Deterioration (n = 54,643)", Column4 = "Censored (n = 135,800)")
-ft <- color(ft, color = "blue", part = "header")
-
-# Print the table
-print(ft)
-
-```
 
 
