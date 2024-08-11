@@ -1,0 +1,287 @@
+---
+title: "CIF"
+date: "2024-08-09"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+
+```{r}
+library(tidycmprsk)
+library(ggplot2)
+library(dplyr)
+library(ggsurvfit)
+```
+ADI - Transplant as outcome
+```{r}
+df_cif_transplant <- df_cand_kipa_w_scores %>%
+  mutate(time = as.numeric(survival_time),  # Ensure time is numeric
+         event = as.numeric(transplant_outcome)) %>%
+  filter(!is.na(time) & !is.na(event)) %>%
+  select(PX_ID, death_outcome, time, event, ADI_decile_num)
+```
+
+Filter to 1st and 10th decile
+```{r}
+df_cif_transplant <- df_cif_transplant %>% filter(!is.na(ADI_decile_num))
+df_cif_transplant = df_cif_transplant %>% filter(ADI_decile_num %in% c(1,10))
+```
+
+```{r}
+# Plot cuminc of transplant
+cif_transplant_ADI <-
+tidycmprsk::cuminc(Surv(time = time, event = as.factor(event)) ~ ADI_decile_num, data = df_cif_transplant) %>%
+  ggcuminc()+
+  labs(
+    x = "Days",
+    y = "Cumulative Incidence of Transplant",
+    title = "Incidence of Transplant by ADI",
+    color = "ADI Decile"
+    )+
+  scale_ggsurvfit()+
+  scale_x_continuous(limits =c(0,1800)) +
+  theme_minimal()+
+  guides(fill = "none", color = guide_legend(override.aes = list(linetype = 1)))
+cif_transplant_ADI
+```
+ADI - Death as outcome
+```{r}
+df_cif_death <- df_cand_kipa_w_scores %>%
+  mutate(time = as.numeric(survival_time),  # Ensure time is numeric
+         event = as.numeric(death_outcome)) %>%
+  filter(!is.na(time) & !is.na(event)) %>%
+  select(PX_ID, death_outcome, time, event, ADI_decile_num)
+```
+
+Filter to 1st and 10th Deciles
+```{r}
+df_cif_death <- df_cif_death %>% filter(!is.na(ADI_decile_num))
+df_cif_death = df_cif_death %>% filter(ADI_decile_num %in% c(1,10))
+```
+
+```{r}
+# Plot cuminc of Death
+cif_death_ADI <-
+tidycmprsk::cuminc(Surv(time = time, event = as.factor(event)) ~ ADI_decile_num, data = df_cif_death) %>%
+  ggcuminc()+
+  labs(
+    x = "Days",
+    y = "Cumulative Incidence of Death/Deterioration",
+    title = "Incidence of Death/Deterioration by ADI",
+    color = "ADI Decile"
+    )+
+  scale_ggsurvfit()+
+  scale_x_continuous(limits =c(0,1800)) +
+  theme_minimal()+
+  guides(fill = "none", color = guide_legend(override.aes = list(linetype = 1)))
+cif_death_ADI
+```
+
+
+SVM - Transplant as outcome
+```{r}
+df_cif_transplant_SVM <- df_cand_kipa_w_scores %>%
+  mutate(time = as.numeric(survival_time),  # Ensure time is numeric
+         event = as.numeric(transplant_outcome)) %>%
+  filter(!is.na(time) & !is.na(event)) %>%
+  select(PX_ID, death_outcome, time, event, SVM_decile_num)
+```
+
+Filter to 1st and 10th decile
+```{r}
+df_cif_transplant_SVM <- df_cif_transplant_SVM %>% filter(!is.na(SVM_decile_num))
+df_cif_transplant_SVM = df_cif_transplant_SVM %>% filter(SVM_decile_num %in% c(1,10))
+```
+
+```{r}
+# Plot cuminc of transplant
+cif_transplant_SVM <-
+tidycmprsk::cuminc(Surv(time = time, event = as.factor(event)) ~ SVM_decile_num, data = df_cif_transplant_SVM) %>%
+  ggcuminc()+
+  labs(
+    x = "Days",
+    y = "Cumulative Incidence of Transplant",
+    title = "Incidence of Transplant by SVM",
+    color = "SVM Decile"
+    )+
+  scale_ggsurvfit()+
+  scale_x_continuous(limits =c(0,1800)) +
+  theme_minimal()+
+  guides(fill = "none", color = guide_legend(override.aes = list(linetype = 1)))
+cif_transplant_SVM
+```
+
+SVM - Death as outcome
+```{r}
+df_cif_death_SVM <- df_cand_kipa_w_scores %>%
+  mutate(time = as.numeric(survival_time),  # Ensure time is numeric
+         event = as.numeric(death_outcome)) %>%
+  filter(!is.na(time) & !is.na(event)) %>%
+  select(PX_ID, death_outcome, time, event, SVM_decile_num)
+```
+
+Filter to 1st and 10th Deciles
+```{r}
+df_cif_death_SVM <- df_cif_death_SVM %>% filter(!is.na(SVM_decile_num))
+df_cif_death_SVM = df_cif_death_SVM %>% filter(SVM_decile_num %in% c(1,10))
+```
+
+```{r}
+# Plot cuminc of Death
+cif_death_SVM <-
+tidycmprsk::cuminc(Surv(time = time, event = as.factor(event)) ~ SVM_decile_num, data = df_cif_death_SVM) %>%
+  ggcuminc()+
+  labs(
+    x = "Days",
+    y = "Cumulative Incidence of Death/Deterioration",
+    title = "Incidence of Death/Deterioration by SVM",
+    color = "SVM Decile"
+    )+
+  scale_ggsurvfit()+
+  scale_x_continuous(limits =c(0,1800)) +
+  theme_minimal()+
+  guides(fill = "none", color = guide_legend(override.aes = list(linetype = 1)))
+cif_death_SVM
+```
+
+SVI - Transplant as outcome
+```{r}
+df_cif_transplant_SVI <- df_cand_kipa_w_scores %>%
+  mutate(time = as.numeric(survival_time),  # Ensure time is numeric
+         event = as.numeric(transplant_outcome)) %>%
+  filter(!is.na(time) & !is.na(event)) %>%
+  select(PX_ID, death_outcome, time, event, SVI_decile_num)
+```
+
+Filter to 1st and 10th decile
+```{r}
+df_cif_transplant_SVI <- df_cif_transplant_SVI %>% filter(!is.na(SVI_decile_num))
+df_cif_transplant_SVI = df_cif_transplant_SVI %>% filter(SVI_decile_num %in% c(1,10))
+```
+
+```{r}
+# Plot cuminc of transplant
+cif_transplant_SVI <-
+tidycmprsk::cuminc(Surv(time = time, event = as.factor(event)) ~ SVI_decile_num, data = df_cif_transplant_SVI) %>%
+  ggcuminc()+
+  labs(
+    x = "Days",
+    y = "Cumulative Incidence of Transplant",
+    title = "Incidence of Transplant by SVI",
+    color = "SVI Decile"
+    )+
+  scale_ggsurvfit()+
+  scale_x_continuous(limits =c(0,1800)) +
+  theme_minimal()+
+  guides(fill = "none", color = guide_legend(override.aes = list(linetype = 1)))
+cif_transplant_SVI
+```
+
+SVI - Death as outcome
+```{r}
+df_cif_death_SVI<- df_cand_kipa_w_scores %>%
+  mutate(time = as.numeric(survival_time),  # Ensure time is numeric
+         event = as.numeric(death_outcome)) %>%
+  filter(!is.na(time) & !is.na(event)) %>%
+  select(PX_ID, death_outcome, time, event, SVI_decile_num)
+```
+
+Filter to 1st and 10th Deciles
+```{r}
+df_cif_death_SVI <- df_cif_death_SVI %>% filter(!is.na(SVI_decile_num))
+df_cif_death_SVI = df_cif_death_SVI %>% filter(SVI_decile_num %in% c(1,10))
+```
+
+```{r}
+# Plot cuminc of Death
+cif_death_SVI <-
+tidycmprsk::cuminc(Surv(time = time, event = as.factor(event)) ~ SVI_decile_num, data = df_cif_death_SVI) %>%
+  ggcuminc()+
+  labs(
+    x = "Days",
+    y = "Cumulative Incidence of Death/Deterioration",
+    title = "Incidence of Death/Deterioration by SVI",
+    color = "SVI Decile"
+    )+
+  scale_ggsurvfit()+
+  scale_x_continuous(limits =c(0,1800)) +
+  theme_minimal()+
+  guides(fill = "none", color = guide_legend(override.aes = list(linetype = 1)))
+cif_death_SVI
+```
+
+DCI - Transplant as outcome
+```{r}
+df_cif_transplant_DCI <- df_cand_kipa_w_scores %>%
+  mutate(time = as.numeric(survival_time),  # Ensure time is numeric
+         event = as.numeric(transplant_outcome)) %>%
+  filter(!is.na(time) & !is.na(event)) %>%
+  select(PX_ID, death_outcome, time, event, DCI_decile_num)
+```
+
+Filter to 1st and 10th decile
+```{r}
+df_cif_transplant_DCI <- df_cif_transplant_DCI %>% filter(!is.na(DCI_decile_num))
+df_cif_transplant_DCI = df_cif_transplant_DCI %>% filter(DCI_decile_num %in% c(1,10))
+```
+
+```{r}
+# Plot cuminc of transplant
+cif_transplant_DCI <-
+tidycmprsk::cuminc(Surv(time = time, event = as.factor(event)) ~ DCI_decile_num, data = df_cif_transplant_DCI) %>%
+  ggcuminc()+
+  labs(
+    x = "Days",
+    y = "Cumulative Incidence of Transplant",
+    title = "Incidence of Transplant by DCI",
+    color = "DCI Decile"
+    )+
+  scale_ggsurvfit()+
+  scale_x_continuous(limits =c(0,1800)) +
+  theme_minimal()+
+  guides(fill = "none", color = guide_legend(override.aes = list(linetype = 1)))
+cif_transplant_DCI
+```
+
+DCI - Death as outcome
+```{r}
+df_cif_death_DCI<- df_cand_kipa_w_scores %>%
+  mutate(time = as.numeric(survival_time),  # Ensure time is numeric
+         event = as.numeric(death_outcome)) %>%
+  filter(!is.na(time) & !is.na(event)) %>%
+  select(PX_ID, death_outcome, time, event, DCI_decile_num)
+```
+
+Filter to 1st and 10th Deciles
+```{r}
+df_cif_death_DCI <- df_cif_death_DCI %>% filter(!is.na(DCI_decile_num))
+df_cif_death_DCI = df_cif_death_DCI %>% filter(DCI_decile_num %in% c(1,10))
+```
+
+```{r}
+# Plot cuminc of Death
+cif_death_DCI <- 
+tidycmprsk::cuminc(Surv(time = time, event = as.factor(event)) ~ DCI_decile_num, data = df_cif_death_DCI) %>%
+  ggcuminc()+
+  labs(
+    x = "Days",
+    y = "Cumulative Incidence of Death/Deterioration",
+    title = "Incidence of Death/Deterioration by DCI",
+    color = "DCI Decile"
+    )+
+  scale_ggsurvfit()+
+  scale_x_continuous(limits =c(0,1800)) +
+  theme_minimal()+
+  guides(fill = "none", color = guide_legend(override.aes = list(linetype = 1)))
+cif_death_DCI
+```
+
+
+```{r}
+library(gridExtra)
+
+grid.arrange(cif_transplant_SVM, cif_death_SVM, cif_transplant_SVI, cif_death_SVI, cif_transplant_ADI, cif_death_ADI, cif_transplant_DCI, cif_death_DCI, ncol = 2, nrow = 4)
+```
+
+
