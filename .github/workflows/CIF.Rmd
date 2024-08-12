@@ -13,6 +13,14 @@ library(ggplot2)
 library(dplyr)
 library(ggsurvfit)
 ```
+
+```{r}
+df_cand_kipa_w_scores$SVM_decile_num <- as.numeric(df_cand_kipa_w_scores$SVM_decile)
+df_cand_kipa_w_scores$SVI_decile_num <- as.numeric(df_cand_kipa_w_scores$SVI_decile)
+df_cand_kipa_w_scores$ADI_decile_num <- as.numeric(df_cand_kipa_w_scores$ADI_decile)
+df_cand_kipa_w_scores$DCI_decile_num <- as.numeric(df_cand_kipa_w_scores$DCI_decile)
+```
+
 ADI - Transplant as outcome
 ```{r}
 df_cif_transplant <- df_cand_kipa_w_scores %>%
