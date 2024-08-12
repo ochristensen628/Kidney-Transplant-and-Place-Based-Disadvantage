@@ -1,0 +1,1149 @@
+---
+title: "Regressions"
+date: "2024-08-03"
+output: html_document
+---
+
+##Cox model - SVM transplant
+```{r}
+# Convert SVM_decile to a factor and set the reference level to 5
+df_cand_kipa_w_scores$SVM_decile <- factor(df_cand_kipa_w_scores$SVM_decile, levels = c("5", setdiff(levels(df_cand_kipa_w_scores$SVM_decile), "5")))
+
+library(survival)
+df_cand_kipa_w_scores$survival_time <- as.numeric(df_cand_kipa_w_scores$survival_time)
+df_cand_kipa_w_scores$time <- df_cand_kipa_w_scores$survival_time
+# Convert transplant_outcome to numeric (if needed)
+df_cand_kipa_w_scores$transplant_outcome <- as.numeric(df_cand_kipa_w_scores$transplant_outcome)
+
+# Directly copy transplant_outcome to status
+df_cand_kipa_w_scores$status <- df_cand_kipa_w_scores$transplant_outcome
+
+# Fit the unadjusted Cox model
+unadjusted_model <- coxph(Surv(time, status) ~ SVM_decile, data = df_cand_kipa_w_scores)
+
+# Fit the adjusted Cox model
+adjusted_model <- coxph(Surv(time, status) ~ SVM_decile + CAN_GENDER + CAN_AGE_AT_LISTING + dial_time + percentile_epts, data = df_cand_kipa_w_scores)
+
+# Load necessary packages
+library(broom)
+
+# Extract results using broom
+unadjusted_results <- tidy(unadjusted_model) %>%
+  select(term, estimate, std.error, p.value) %>%
+  mutate(model = "Unadjusted")
+
+adjusted_results <- tidy(adjusted_model) %>%
+  select(term, estimate, std.error, p.value) %>%
+  mutate(model = "Adjusted")
+
+# Combine results into one data frame
+combined_results_SVM_transplant <- bind_rows(unadjusted_results, adjusted_results)
+
+# Calculate Hazard Ratios (HR) and Confidence Intervals (CI)
+combined_results_SVM_transplant <- combined_results_SVM_transplant %>%
+  mutate(
+    HR = exp(estimate),
+    lower_CI = exp(estimate - 1.96 * std.error),
+    upper_CI = exp(estimate + 1.96 * std.error)
+  )
+
+# Print results
+library(dplyr)
+
+combined_results_SVM_transplant %>%
+  arrange(term, model) %>%
+  select(term, model, HR, lower_CI, upper_CI, p.value) %>%
+  rename(
+    Variable = term,
+    Model = model,
+    "Hazard Ratio (HR)" = HR,
+    "95% CI Lower" = lower_CI,
+    "95% CI Upper" = upper_CI,
+    "P-value" = p.value
+  )
+
+# Export to CSV
+write.csv(combined_results_SVM_transplant, file = "cox_model_results_svm.csv", row.names = FALSE)
+```
+##HR scatter plot - SVM transplant
+```{r}
+# Define the desired order for the x-axis
+desired_order <- c("SVM_decile1", "SVM_decile2", "SVM_decile3", "SVM_decile4", 
+                    "SVM_decile6", "SVM_decile7", "SVM_decile8", "SVM_decile9", 
+                    "SVM_decile10", "CAN_AGE_AT_LISTING", "CAN_GENDERM", "dial_time", "percentile_epts")
+
+# Convert 'term' to a factor with specified levels
+combined_results_SVM_transplant$term <- factor(combined_results_SVM_transplant$term, 
+                                               levels = desired_order)
+
+# Create the scatter plot with ordered x-axis
+HR_scatter_SVM_transplant <- ggplot(combined_results_SVM_transplant, aes(x = term, y = HR, color = model)) +
+  geom_point(aes(size = HR)) +
+  geom_errorbar(aes(ymin = lower_CI, ymax = upper_CI), width = 0.2) +
+  scale_y_log10() +  # Use log scale for better visualization of ratios
+  labs(
+    x = "Variable",
+    y = "Hazard Ratio (HR)",
+    title = "Scatter Plot of Hazard Ratios - SVM Transplant"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+HR_scatter_SVM_transplant
+
+```
+```{r}
+library(survival)
+library(dplyr)
+
+# Ensure dial_time is numeric
+df_cand_kipa_w_scores$dial_time <- as.numeric(df_cand_kipa_w_scores$dial_time)
+
+# Center dial_time by subtracting 0
+df_cand_kipa_w_scores$centered_dial_time <- df_cand_kipa_w_scores$dial_time - 0
+
+# Fit the Cox models using the centered dial_time
+unadjusted_model <- coxph(Surv(time, status) ~ SVM_decile, data = df_cand_kipa_w_scores)
+
+adjusted_model <- coxph(Surv(time, status) ~ SVM_decile + CAN_GENDER + CAN_AGE_AT_LISTING + centered_dial_time + percentile_epts, data = df_cand_kipa_w_scores)
+
+# Extract results using broom
+library(broom)
+
+unadjusted_results <- tidy(unadjusted_model) %>%
+  select(term, estimate, std.error, p.value) %>%
+  mutate(model = "Unadjusted")
+
+adjusted_results <- tidy(adjusted_model) %>%
+  select(term, estimate, std.error, p.value) %>%
+  mutate(model = "Adjusted")
+
+# Combine results into one data frame
+combined_results_SVM_transplant <- bind_rows(unadjusted_results, adjusted_results)
+
+# Calculate Hazard Ratios (HR) and Confidence Intervals (CI)
+combined_results_SVM_transplant <- combined_results_SVM_transplant %>%
+  mutate(
+    HR = exp(estimate),
+    lower_CI = exp(estimate - 1.96 * std.error),
+    upper_CI = exp(estimate + 1.96 * std.error)
+  )
+
+# Print results
+library(dplyr)
+
+combined_results_SVM_transplant %>%
+  arrange(term, model) %>%
+  select(term, model, HR, lower_CI, upper_CI, p.value) %>%
+  rename(
+    Variable = term,
+    Model = model,
+    "Hazard Ratio (HR)" = HR,
+    "95% CI Lower" = lower_CI,
+    "95% CI Upper" = upper_CI,
+    "P-value" = p.value
+  )
+
+# Define the desired order for the x-axis
+desired_order <- c("SVM_decile1", "SVM_decile2", "SVM_decile3", "SVM_decile4", 
+                    "SVM_decile6", "SVM_decile7", "SVM_decile8", "SVM_decile9", 
+                    "SVM_decile10", "CAN_AGE_AT_LISTING", "CAN_GENDERM", "centered_dial_time", "percentile_epts")
+
+# Convert 'term' to a factor with specified levels
+combined_results_SVM_transplant$term <- factor(combined_results_SVM_transplant$term, 
+                                               levels = desired_order)
+
+# Create the scatter plot with ordered x-axis
+HR_scatter_SVM_transplant <- ggplot(combined_results_SVM_transplant, aes(x = term, y = HR, color = model)) +
+  geom_point(aes(size = HR)) +
+  geom_errorbar(aes(ymin = lower_CI, ymax = upper_CI), width = 0.2) +
+  scale_y_log10() +  # Use log scale for better visualization of ratios
+  labs(
+    x = "Variable",
+    y = "Hazard Ratio (HR)",
+    title = "Scatter Plot of Hazard Ratios - SVM Transplant"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+HR_scatter_SVM_transplant
+
+```
+
+##HR forest plot - SVM transplant
+```{r}
+# Load necessary packages
+library(ggplot2)
+library(dplyr)
+
+# Define the desired order for the 'term' variable
+desired_order <- c("SVM_decile1", "SVM_decile2", "SVM_decile3", "SVM_decile4", "SVM_decile6", "SVM_decile7", "SVM_decile8",
+                    "SVM_decile9", "SVM_decile10", "CAN_AGE_AT_LISTING", "CAN_GENDERM", "dial_time", "percentile_epts")  # Ensure this list matches your unique terms
+
+# Convert 'term' to a factor with specified levels
+combined_results_SVM_transplant$term <- factor(combined_results_SVM_transplant$term, 
+                                               levels = desired_order)
+
+# Create the forest plot
+HR_forest_SVM_transplant <- ggplot(combined_results_SVM_transplant, aes(x = HR, ymin = lower_CI, ymax = upper_CI, color = model)) +
+  geom_pointrange(aes(y = term)) +
+  scale_x_log10() +  # Use log scale for better visualization of ratios
+  labs(
+    x = "Hazard Ratio (HR)",
+    y = "Variable",
+    title = "Forest Plot of Hazard Ratios - SVM Transplant"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    axis.text.y = element_text(size = 10)
+  )
+
+HR_forest_SVM_transplant
+
+```
+
+##Cox model - SVM death/deterioration
+```{r}
+# Convert SVM_decile to a factor and set the reference level to 5
+df_cand_kipa_w_scores$SVM_decile <- factor(df_cand_kipa_w_scores$SVM_decile, levels = c("5", setdiff(levels(df_cand_kipa_w_scores$SVM_decile), "5")))
+
+df_cand_kipa_w_scores$survival_time <- as.numeric(df_cand_kipa_w_scores$survival_time)
+df_cand_kipa_w_scores$time <- df_cand_kipa_w_scores$survival_time
+# Convert transplant_outcome to numeric (if needed)
+df_cand_kipa_w_scores$death_outcome <- as.numeric(df_cand_kipa_w_scores$death_outcome)
+
+# Directly copy transplant_outcome to status
+df_cand_kipa_w_scores$status <- df_cand_kipa_w_scores$death_outcome
+
+# Fit the unadjusted Cox model
+unadjusted_model <- coxph(Surv(time, status) ~ SVM_decile, data = df_cand_kipa_w_scores)
+
+# Fit the adjusted Cox model
+adjusted_model <- coxph(Surv(time, status) ~ SVM_decile + CAN_GENDER + CAN_AGE_AT_LISTING + dial_time + percentile_epts, data = df_cand_kipa_w_scores)
+
+# Load necessary packages
+library(broom)
+
+# Extract results using broom
+unadjusted_results <- tidy(unadjusted_model) %>%
+  select(term, estimate, std.error, p.value) %>%
+  mutate(model = "Unadjusted")
+
+adjusted_results <- tidy(adjusted_model) %>%
+  select(term, estimate, std.error, p.value) %>%
+  mutate(model = "Adjusted")
+
+# Combine results into one data frame
+combined_results_SVM_death <- bind_rows(unadjusted_results, adjusted_results)
+
+# Calculate Hazard Ratios (HR) and Confidence Intervals (CI)
+combined_results_SVM_death <- combined_results_SVM_death %>%
+  mutate(
+    HR = exp(estimate),
+    lower_CI = exp(estimate - 1.96 * std.error),
+    upper_CI = exp(estimate + 1.96 * std.error)
+  )
+
+# Print results
+library(dplyr)
+
+combined_results_SVM_death %>%
+  arrange(term, model) %>%
+  select(term, model, HR, lower_CI, upper_CI, p.value) %>%
+  rename(
+    Variable = term,
+    Model = model,
+    "Hazard Ratio (HR)" = HR,
+    "95% CI Lower" = lower_CI,
+    "95% CI Upper" = upper_CI,
+    "P-value" = p.value
+  )
+
+# Export to CSV
+write.csv(combined_results_SVM_death, file = "cox_model_results_svm2.csv", row.names = FALSE)
+```
+##HR scatter plot - SVM death/deterioration
+```{r}
+# Define the desired order for the x-axis
+desired_order <- c("SVM_decile1", "SVM_decile2", "SVM_decile3", "SVM_decile4", 
+                    "SVM_decile6", "SVM_decile7", "SVM_decile8", "SVM_decile9", 
+                    "SVM_decile10", "CAN_AGE_AT_LISTING", "CAN_GENDERM", "dial_time", "percentile_epts")
+
+# Convert 'term' to a factor with specified levels
+combined_results_SVM_death$term <- factor(combined_results_SVM_death$term, 
+                                               levels = desired_order)
+
+# Create the scatter plot with ordered x-axis
+HR_scatter_SVM_death <- ggplot(combined_results_SVM_death, aes(x = term, y = HR, color = model)) +
+  geom_point(aes(size = HR)) +
+  geom_errorbar(aes(ymin = lower_CI, ymax = upper_CI), width = 0.2) +
+  scale_y_log10() +  # Use log scale for better visualization of ratios
+  labs(
+    x = "Variable",
+    y = "Hazard Ratio (HR)",
+    title = "Scatter Plot of Hazard Ratios - SVM Death"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+HR_scatter_SVM_death
+```
+
+##HR forest plot - SVM death/deterioration
+```{r}
+# Load necessary packages
+library(ggplot2)
+library(dplyr)
+
+# Define the desired order for the 'term' variable
+desired_order <- c("SVM_decile1", "SVM_decile2", "SVM_decile3", "SVM_decile4", "SVM_decile6", "SVM_decile7", "SVM_decile8",
+                    "SVM_decile9", "SVM_decile10", "CAN_AGE_AT_LISTING", "CAN_GENDERM", "dial_time", "percentile_epts")  # Ensure this list matches your unique terms
+
+# Convert 'term' to a factor with specified levels
+combined_results_SVM_death$term <- factor(combined_results_SVM_death$term, 
+                                               levels = desired_order)
+
+# Create the forest plot
+HR_forest_SVM_death <- ggplot(combined_results_SVM_death, aes(x = HR, ymin = lower_CI, ymax = upper_CI, color = model)) +
+  geom_pointrange(aes(y = term)) +
+  scale_x_log10() +  # Use log scale for better visualization of ratios
+  labs(
+    x = "Hazard Ratio (HR)",
+    y = "Variable",
+    title = "Forest Plot of Hazard Ratios - SVM Death"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    axis.text.y = element_text(size = 10)
+  )
+
+HR_forest_SVM_death
+
+```
+
+##Cox model - SVI transplant
+```{r}
+# Convert SVM_decile to a factor and set the reference level to 5
+df_cand_kipa_w_scores$SVI_decile <- factor(df_cand_kipa_w_scores$SVI_decile, levels = c("5", setdiff(levels(df_cand_kipa_w_scores$SVI_decile), "5")))
+
+df_cand_kipa_w_scores$SVI_decile <- as.factor(df_cand_kipa_w_scores$SVI_decile)
+df_cand_kipa_w_scores$SVI_decile <- relevel(df_cand_kipa_w_scores$SVI_decile, ref = "5")
+
+df_cand_kipa_w_scores$survival_time <- as.numeric(df_cand_kipa_w_scores$survival_time)
+df_cand_kipa_w_scores$time <- df_cand_kipa_w_scores$survival_time
+# Convert transplant_outcome to numeric (if needed)
+df_cand_kipa_w_scores$transplant_outcome <- as.numeric(df_cand_kipa_w_scores$transplant_outcome)
+
+# Directly copy transplant_outcome to status
+df_cand_kipa_w_scores$status <- df_cand_kipa_w_scores$transplant_outcome
+
+# Fit the unadjusted Cox model
+unadjusted_model <- coxph(Surv(time, status) ~ SVI_decile, data = df_cand_kipa_w_scores)
+
+# Fit the adjusted Cox model
+adjusted_model <- coxph(Surv(time, status) ~ SVI_decile + CAN_GENDER + CAN_AGE_AT_LISTING + dial_time + percentile_epts, data = df_cand_kipa_w_scores)
+
+# Load necessary packages
+library(broom)
+
+# Extract results using broom
+unadjusted_results <- tidy(unadjusted_model) %>%
+  select(term, estimate, std.error, p.value) %>%
+  mutate(model = "Unadjusted")
+
+adjusted_results <- tidy(adjusted_model) %>%
+  select(term, estimate, std.error, p.value) %>%
+  mutate(model = "Adjusted")
+
+# Combine results into one data frame
+combined_results_SVI_transplant <- bind_rows(unadjusted_results, adjusted_results)
+
+# Calculate Hazard Ratios (HR) and Confidence Intervals (CI)
+combined_results_SVI_transplant <- combined_results_SVI_transplant %>%
+  mutate(
+    HR = exp(estimate),
+    lower_CI = exp(estimate - 1.96 * std.error),
+    upper_CI = exp(estimate + 1.96 * std.error)
+  )
+
+# Print results
+library(dplyr)
+
+combined_results_SVI_transplant %>%
+  arrange(term, model) %>%
+  select(term, model, HR, lower_CI, upper_CI, p.value) %>%
+  rename(
+    Variable = term,
+    Model = model,
+    "Hazard Ratio (HR)" = HR,
+    "95% CI Lower" = lower_CI,
+    "95% CI Upper" = upper_CI,
+    "P-value" = p.value
+  )
+
+# Export to CSV
+write.csv(combined_results_SVI_transplant, file = "cox_model_results_svi.csv", row.names = FALSE)
+```
+##SVI kaplan meier (probably not useful)
+```{r}
+# Load necessary libraries
+library(survival)
+library(survminer)  # For better survival plots
+library(RColorBrewer)
+
+# Ensure SVI_decile is a factor and set reference level
+df_cand_kipa_w_scores$SVI_decile <- as.factor(df_cand_kipa_w_scores$SVI_decile)
+df_cand_kipa_w_scores$SVI_decile <- relevel(df_cand_kipa_w_scores$SVI_decile, ref = "5")
+
+# Convert time and status variables to appropriate types
+df_cand_kipa_w_scores$time <- as.numeric(df_cand_kipa_w_scores$survival_time)
+df_cand_kipa_w_scores$status <- as.numeric(df_cand_kipa_w_scores$transplant_outcome)
+
+# Fit the Kaplan-Meier model
+km_fit <- survfit(Surv(time, status) ~ SVI_decile, data = df_cand_kipa_w_scores)
+
+palette <- brewer.pal(n = length(levels(df_cand_kipa_w_scores$SVI_decile)), name = "Dark2")
+
+# Example: Zooming in on a specific time range and survival probability range
+
+# Define your zoom-in ranges
+xlim_range <- c(0, 1850)  # Adjust the time range as needed
+ylim_range <- c(0, 1)    # Adjust the survival probability range as needed
+
+# Plot Kaplan-Meier curves with adjusted zoom-in ranges
+ggsurvplot(km_fit, data = df_cand_kipa_w_scores,
+           pval = TRUE,               # Show p-value of the log-rank test
+           conf.int = TRUE,           # Show confidence intervals
+           risk.table = TRUE,         # Show the number of at risk individuals
+           title = "Kaplan-Meier Survival Curves by SVI Decile",
+           xlab = "Time",
+           ylab = "Survival Probability",
+           xlim = xlim_range,         # Set x-axis limits
+           ylim = ylim_range)         # Set y-axis limits
+
+```
+
+```{r}
+# Load necessary packages
+library(survminer)
+library(survival)
+
+# Fit Kaplan-Meier model
+fit <- survfit(Surv(time, status) ~ SVI_decile, data = df_cand_kipa_w_scores)
+
+# Plot Kaplan-Meier survival curves
+ggsurvplot(
+  fit,
+  data = df_cand_kipa_w_scores,
+  size = 0.5,
+  pval = TRUE,
+  legend.labs = levels(df_cand_kipa_w_scores$SVI_decile),
+  palette = "Dark2",
+  ggtheme = theme_minimal()
+)
+```
+##HR scatter plot - SVI Transplant
+```{r}
+# Define the desired order for the x-axis
+desired_order <- c("SVI_decile1", "SVI_decile2", "SVI_decile3", "SVI_decile4", 
+                    "SVI_decile6", "SVI_decile7", "SVI_decile8", "SVI_decile9", 
+                    "SVI_decile10", "CAN_AGE_AT_LISTING", "CAN_GENDERM", "dial_time", "percentile_epts")
+
+# Convert 'term' to a factor with specified levels
+combined_results_SVI_transplant$term <- factor(combined_results_SVI_transplant$term, 
+                                               levels = desired_order)
+
+# Create the scatter plot with ordered x-axis
+HR_scatter_SVI_transplant <- ggplot(combined_results_SVI_transplant, aes(x = term, y = HR, color = model)) +
+  geom_point(aes(size = HR)) +
+  geom_errorbar(aes(ymin = lower_CI, ymax = upper_CI), width = 0.2) +
+  scale_y_log10() +  # Use log scale for better visualization of ratios
+  labs(
+    x = "Variable",
+    y = "Hazard Ratio (HR)",
+    title = "Scatter Plot of Hazard Ratios - SVI Transplant"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+HR_scatter_SVI_transplant
+```
+
+##HR forest plot - SVI transplant
+```{r}
+# Load necessary packages
+library(ggplot2)
+library(dplyr)
+
+# Define the desired order for the 'term' variable
+desired_order <- c("SVI_decile1", "SVI_decile2", "SVI_decile3", "SVI_decile4", "SVI_decile6", "SVI_decile7", "SVI_decile8",
+                    "SVI_decile9", "SVI_decile10", "CAN_AGE_AT_LISTING", "CAN_GENDERM", "dial_time", "percentile_epts")  # Ensure this list matches your unique terms
+
+# Convert 'term' to a factor with specified levels
+combined_results_SVI_transplant$term <- factor(combined_results_SVI_transplant$term, 
+                                               levels = desired_order)
+
+# Create the forest plot
+HR_forest_SVI_transplant <- ggplot(combined_results_SVI_transplant, aes(x = HR, ymin = lower_CI, ymax = upper_CI, color = model)) +
+  geom_pointrange(aes(y = term)) +
+  scale_x_log10() +  # Use log scale for better visualization of ratios
+  labs(
+    x = "Hazard Ratio (HR)",
+    y = "Variable",
+    title = "Forest Plot of Hazard Ratios - SVI Transplant"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    axis.text.y = element_text(size = 10)
+  )
+
+HR_forest_SVI_transplant
+```
+
+##Cox model - SVI death/deterioration
+```{r}
+# Convert SVM_decile to a factor and set the reference level to 5
+df_cand_kipa_w_scores$SVI_decile <- factor(df_cand_kipa_w_scores$SVI_decile, levels = c("5", setdiff(levels(df_cand_kipa_w_scores$SVI_decile), "5")))
+
+df_cand_kipa_w_scores$SVI_decile <- as.factor(df_cand_kipa_w_scores$SVI_decile)
+df_cand_kipa_w_scores$SVI_decile <- relevel(df_cand_kipa_w_scores$SVI_decile, ref = "5")
+
+df_cand_kipa_w_scores$survival_time <- as.numeric(df_cand_kipa_w_scores$survival_time)
+df_cand_kipa_w_scores$time <- df_cand_kipa_w_scores$survival_time
+# Convert transplant_outcome to numeric (if needed)
+df_cand_kipa_w_scores$death_outcome <- as.numeric(df_cand_kipa_w_scores$death_outcome)
+
+# Directly copy transplant_outcome to status
+df_cand_kipa_w_scores$status <- df_cand_kipa_w_scores$death_outcome
+
+# Fit the unadjusted Cox model
+unadjusted_model <- coxph(Surv(time, status) ~ SVI_decile, data = df_cand_kipa_w_scores)
+
+# Fit the adjusted Cox model
+adjusted_model <- coxph(Surv(time, status) ~ SVI_decile + CAN_GENDER + CAN_AGE_AT_LISTING + dial_time + percentile_epts, data = df_cand_kipa_w_scores)
+
+# Load necessary packages
+library(broom)
+
+# Extract results using broom
+unadjusted_results <- tidy(unadjusted_model) %>%
+  select(term, estimate, std.error, p.value) %>%
+  mutate(model = "Unadjusted")
+
+adjusted_results <- tidy(adjusted_model) %>%
+  select(term, estimate, std.error, p.value) %>%
+  mutate(model = "Adjusted")
+
+# Combine results into one data frame
+combined_results_SVI_death <- bind_rows(unadjusted_results, adjusted_results)
+
+# Calculate Hazard Ratios (HR) and Confidence Intervals (CI)
+combined_results_SVI_death <- combined_results_SVI_death %>%
+  mutate(
+    HR = exp(estimate),
+    lower_CI = exp(estimate - 1.96 * std.error),
+    upper_CI = exp(estimate + 1.96 * std.error)
+  )
+
+# Print results
+library(dplyr)
+
+combined_results_SVI_death %>%
+  arrange(term, model) %>%
+  select(term, model, HR, lower_CI, upper_CI, p.value) %>%
+  rename(
+    Variable = term,
+    Model = model,
+    "Hazard Ratio (HR)" = HR,
+    "95% CI Lower" = lower_CI,
+    "95% CI Upper" = upper_CI,
+    "P-value" = p.value
+  )
+
+# Export to CSV
+write.csv(combined_results_SVI_death, file = "cox_model_results_svi2.csv", row.names = FALSE)
+```
+##HR scatter plot - SVI death/deterioration
+```{r}
+# Define the desired order for the x-axis
+desired_order <- c("SVI_decile1", "SVI_decile2", "SVI_decile3", "SVI_decile4", 
+                    "SVI_decile6", "SVI_decile7", "SVI_decile8", "SVI_decile9", 
+                    "SVI_decile10", "CAN_AGE_AT_LISTING", "CAN_GENDERM", "dial_time", "percentile_epts")
+
+# Convert 'term' to a factor with specified levels
+combined_results_SVI_death$term <- factor(combined_results_SVI_death$term, 
+                                               levels = desired_order)
+
+# Create the scatter plot with ordered x-axis
+HR_scatter_SVI_death <- ggplot(combined_results_SVI_death, aes(x = term, y = HR, color = model)) +
+  geom_point(aes(size = HR)) +
+  geom_errorbar(aes(ymin = lower_CI, ymax = upper_CI), width = 0.2) +
+  scale_y_log10() +  # Use log scale for better visualization of ratios
+  labs(
+    x = "Variable",
+    y = "Hazard Ratio (HR)",
+    title = "Scatter Plot of Hazard Ratios - SVI Death"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+HR_scatter_SVI_death
+```
+
+##HR forest plot - SVI death/deterioration
+```{r}
+# Load necessary packages
+library(ggplot2)
+library(dplyr)
+
+# Define the desired order for the 'term' variable
+desired_order <- c("SVI_decile1", "SVI_decile2", "SVI_decile3", "SVI_decile4", "SVI_decile6", "SVI_decile7", "SVI_decile8",
+                    "SVI_decile9", "SVI_decile10", "CAN_AGE_AT_LISTING", "CAN_GENDERM", "dial_time", "percentile_epts")  # Ensure this list matches your unique terms
+
+# Convert 'term' to a factor with specified levels
+combined_results_SVI_death$term <- factor(combined_results_SVI_death$term, 
+                                               levels = desired_order)
+
+# Create the forest plot
+HR_forest_SVI_death <- ggplot(combined_results_SVI_death, aes(x = HR, ymin = lower_CI, ymax = upper_CI, color = model)) +
+  geom_pointrange(aes(y = term)) +
+  scale_x_log10() +  # Use log scale for better visualization of ratios
+  labs(
+    x = "Hazard Ratio (HR)",
+    y = "Variable",
+    title = "Forest Plot of Hazard Ratios - SVI Death"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    axis.text.y = element_text(size = 10)
+  )
+
+HR_forest_SVI_death
+```
+
+##Cox model - ADI transplant
+```{r}
+# Convert SVM_decile to a factor and set the reference level to 5
+df_cand_kipa_w_scores$ADI_decile <- factor(df_cand_kipa_w_scores$ADI_decile, levels = c("5", setdiff(levels(df_cand_kipa_w_scores$ADI_decile), "5")))
+
+df_cand_kipa_w_scores$survival_time <- as.numeric(df_cand_kipa_w_scores$survival_time)
+df_cand_kipa_w_scores$time <- df_cand_kipa_w_scores$survival_time
+# Convert transplant_outcome to numeric (if needed)
+df_cand_kipa_w_scores$transplant_outcome <- as.numeric(df_cand_kipa_w_scores$transplant_outcome)
+
+# Directly copy transplant_outcome to status
+df_cand_kipa_w_scores$status <- df_cand_kipa_w_scores$transplant_outcome
+
+# Fit the unadjusted Cox model
+unadjusted_model <- coxph(Surv(time, status) ~ ADI_decile, data = df_cand_kipa_w_scores)
+
+# Fit the adjusted Cox model
+adjusted_model <- coxph(Surv(time, status) ~ ADI_decile + CAN_GENDER + CAN_AGE_AT_LISTING + dial_time + percentile_epts, data = df_cand_kipa_w_scores)
+
+# Load necessary packages
+library(broom)
+
+# Extract results using broom
+unadjusted_results <- tidy(unadjusted_model) %>%
+  select(term, estimate, std.error, p.value) %>%
+  mutate(model = "Unadjusted")
+
+adjusted_results <- tidy(adjusted_model) %>%
+  select(term, estimate, std.error, p.value) %>%
+  mutate(model = "Adjusted")
+
+# Combine results into one data frame
+combined_results_ADI_transplant <- bind_rows(unadjusted_results, adjusted_results)
+
+# Calculate Hazard Ratios (HR) and Confidence Intervals (CI)
+combined_results_ADI_transplant <- combined_results_ADI_transplant %>%
+  mutate(
+    HR = exp(estimate),
+    lower_CI = exp(estimate - 1.96 * std.error),
+    upper_CI = exp(estimate + 1.96 * std.error)
+  )
+
+# Print results
+library(dplyr)
+
+combined_results_ADI_transplant %>%
+  arrange(term, model) %>%
+  select(term, model, HR, lower_CI, upper_CI, p.value) %>%
+  rename(
+    Variable = term,
+    Model = model,
+    "Hazard Ratio (HR)" = HR,
+    "95% CI Lower" = lower_CI,
+    "95% CI Upper" = upper_CI,
+    "P-value" = p.value
+  )
+
+# Export to CSV
+write.csv(combined_results_ADI_transplant, file = "cox_model_results_adi.csv", row.names = FALSE)
+```
+##HR scatter plot - ADI Transplant
+```{r}
+# Define the desired order for the x-axis
+desired_order <- c("ADI_decile1", "ADI_decile2", "ADI_decile3", "ADI_decile4", 
+                    "ADI_decile6", "ADI_decile7", "ADI_decile8", "ADI_decile9", 
+                    "ADI_decile10", "CAN_AGE_AT_LISTING", "CAN_GENDERM", "dial_time", "percentile_epts")
+
+# Convert 'term' to a factor with specified levels
+combined_results_ADI_transplant$term <- factor(combined_results_ADI_transplant$term, 
+                                               levels = desired_order)
+
+# Create the scatter plot with ordered x-axis
+HR_scatter_ADI_transplant <- ggplot(combined_results_ADI_transplant, aes(x = term, y = HR, color = model)) +
+  geom_point(aes(size = HR)) +
+  geom_errorbar(aes(ymin = lower_CI, ymax = upper_CI), width = 0.2) +
+  scale_y_log10() +  # Use log scale for better visualization of ratios
+  labs(
+    x = "Variable",
+    y = "Hazard Ratio (HR)",
+    title = "Scatter Plot of Hazard Ratios - ADI Transplant"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+HR_scatter_ADI_transplant
+```
+
+##HR forest plot - ADI transplant
+```{r}
+# Load necessary packages
+library(ggplot2)
+library(dplyr)
+
+# Define the desired order for the 'term' variable
+desired_order <- c("ADI_decile1", "ADI_decile2", "ADI_decile3", "ADI_decile4", "ADI_decile6", "ADI_decile7", "ADI_decile8",
+                    "ADI_decile9", "ADI_decile10", "CAN_AGE_AT_LISTING", "CAN_GENDERM", "dial_time", "percentile_epts")  # Ensure this list matches your unique terms
+
+# Convert 'term' to a factor with specified levels
+combined_results_ADI_transplant$term <- factor(combined_results_ADI_transplant$term, 
+                                               levels = desired_order)
+
+# Create the forest plot
+HR_forest_ADI_transplant <- ggplot(combined_results_ADI_transplant, aes(x = HR, ymin = lower_CI, ymax = upper_CI, color = model)) +
+  geom_pointrange(aes(y = term)) +
+  scale_x_log10() +  # Use log scale for better visualization of ratios
+  labs(
+    x = "Hazard Ratio (HR)",
+    y = "Variable",
+    title = "Forest Plot of Hazard Ratios - ADI Transplant"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    axis.text.y = element_text(size = 10)
+  )
+
+HR_forest_ADI_transplant
+```
+
+##Cox model - ADI death/deterioration
+```{r}
+# Convert SVM_decile to a factor and set the reference level to 5
+df_cand_kipa_w_scores$ADI_decile <- factor(df_cand_kipa_w_scores$ADI_decile, levels = c("5", setdiff(levels(df_cand_kipa_w_scores$ADI_decile), "5")))
+
+df_cand_kipa_w_scores$survival_time <- as.numeric(df_cand_kipa_w_scores$survival_time)
+df_cand_kipa_w_scores$time <- df_cand_kipa_w_scores$survival_time
+# Convert transplant_outcome to numeric (if needed)
+df_cand_kipa_w_scores$death_outcome <- as.numeric(df_cand_kipa_w_scores$death_outcome)
+
+# Directly copy transplant_outcome to status
+df_cand_kipa_w_scores$status <- df_cand_kipa_w_scores$death_outcome
+
+# Fit the unadjusted Cox model
+unadjusted_model <- coxph(Surv(time, status) ~ ADI_decile, data = df_cand_kipa_w_scores)
+
+# Fit the adjusted Cox model
+adjusted_model <- coxph(Surv(time, status) ~ ADI_decile + CAN_GENDER + CAN_AGE_AT_LISTING + dial_time + percentile_epts, data = df_cand_kipa_w_scores)
+
+# Load necessary packages
+library(broom)
+
+# Extract results using broom
+unadjusted_results <- tidy(unadjusted_model) %>%
+  select(term, estimate, std.error, p.value) %>%
+  mutate(model = "Unadjusted")
+
+adjusted_results <- tidy(adjusted_model) %>%
+  select(term, estimate, std.error, p.value) %>%
+  mutate(model = "Adjusted")
+
+# Combine results into one data frame
+combined_results_ADI_death <- bind_rows(unadjusted_results, adjusted_results)
+
+# Calculate Hazard Ratios (HR) and Confidence Intervals (CI)
+combined_results_ADI_death <- combined_results_ADI_death %>%
+  mutate(
+    HR = exp(estimate),
+    lower_CI = exp(estimate - 1.96 * std.error),
+    upper_CI = exp(estimate + 1.96 * std.error)
+  )
+
+# Print results
+library(dplyr)
+
+combined_results_ADI_death %>%
+  arrange(term, model) %>%
+  select(term, model, HR, lower_CI, upper_CI, p.value) %>%
+  rename(
+    Variable = term,
+    Model = model,
+    "Hazard Ratio (HR)" = HR,
+    "95% CI Lower" = lower_CI,
+    "95% CI Upper" = upper_CI,
+    "P-value" = p.value
+  )
+
+# Export to CSV
+write.csv(combined_results_ADI_death, file = "cox_model_results_adi2.csv", row.names = FALSE)
+```
+##HR scatter plot - ADI death/deterioration
+```{r}
+# Define the desired order for the x-axis
+desired_order <- c("ADI_decile1", "ADI_decile2", "ADI_decile3", "ADI_decile4", 
+                    "ADI_decile6", "ADI_decile7", "ADI_decile8", "ADI_decile9", 
+                    "ADI_decile10", "CAN_AGE_AT_LISTING", "CAN_GENDERM", "dial_time", "percentile_epts")
+
+# Convert 'term' to a factor with specified levels
+combined_results_ADI_death$term <- factor(combined_results_ADI_death$term, 
+                                               levels = desired_order)
+
+# Create the scatter plot with ordered x-axis
+HR_scatter_ADI_death <- ggplot(combined_results_ADI_death, aes(x = term, y = HR, color = model)) +
+  geom_point(aes(size = HR)) +
+  geom_errorbar(aes(ymin = lower_CI, ymax = upper_CI), width = 0.2) +
+  scale_y_log10() +  # Use log scale for better visualization of ratios
+  labs(
+    x = "Variable",
+    y = "Hazard Ratio (HR)",
+    title = "Scatter Plot of Hazard Ratios - ADI Death"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+HR_scatter_ADI_death
+```
+
+##HR forest plot - ADI death/deterioration
+```{r}
+# Load necessary packages
+library(ggplot2)
+library(dplyr)
+
+# Define the desired order for the 'term' variable
+desired_order <- c("ADI_decile1", "ADI_decile2", "ADI_decile3", "ADI_decile4", "ADI_decile6", "ADI_decile7", "ADI_decile8",
+                    "ADI_decile9", "ADI_decile10", "CAN_AGE_AT_LISTING", "CAN_GENDERM", "dial_time", "percentile_epts")  # Ensure this list matches your unique terms
+
+# Convert 'term' to a factor with specified levels
+combined_results_ADI_death$term <- factor(combined_results_ADI_death$term, 
+                                               levels = desired_order)
+
+# Create the forest plot
+HR_forest_ADI_death <- ggplot(combined_results_ADI_death, aes(x = HR, ymin = lower_CI, ymax = upper_CI, color = model)) +
+  geom_pointrange(aes(y = term)) +
+  scale_x_log10() +  # Use log scale for better visualization of ratios
+  labs(
+    x = "Hazard Ratio (HR)",
+    y = "Variable",
+    title = "Forest Plot of Hazard Ratios - ADI Death"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    axis.text.y = element_text(size = 10)
+  )
+
+HR_forest_ADI_death
+```
+
+##Cox model - DCI transplant
+```{r}
+# Convert SVM_decile to a factor and set the reference level to 5
+df_cand_kipa_w_scores$DCI_decile <- factor(df_cand_kipa_w_scores$DCI_decile, levels = c("5", setdiff(levels(df_cand_kipa_w_scores$DCI_decile), "5")))
+
+df_cand_kipa_w_scores$survival_time <- as.numeric(df_cand_kipa_w_scores$survival_time)
+df_cand_kipa_w_scores$time <- df_cand_kipa_w_scores$survival_time
+# Convert transplant_outcome to numeric (if needed)
+df_cand_kipa_w_scores$transplant_outcome <- as.numeric(df_cand_kipa_w_scores$transplant_outcome)
+
+# Directly copy transplant_outcome to status
+df_cand_kipa_w_scores$status <- df_cand_kipa_w_scores$transplant_outcome
+
+# Fit the unadjusted Cox model
+unadjusted_model <- coxph(Surv(time, status) ~ DCI_decile, data = df_cand_kipa_w_scores)
+
+# Fit the adjusted Cox model
+adjusted_model <- coxph(Surv(time, status) ~ DCI_decile + CAN_GENDER + CAN_AGE_AT_LISTING + dial_time + percentile_epts, data = df_cand_kipa_w_scores)
+
+# Load necessary packages
+library(broom)
+
+# Extract results using broom
+unadjusted_results <- tidy(unadjusted_model) %>%
+  select(term, estimate, std.error, p.value) %>%
+  mutate(model = "Unadjusted")
+
+adjusted_results <- tidy(adjusted_model) %>%
+  select(term, estimate, std.error, p.value) %>%
+  mutate(model = "Adjusted")
+
+# Combine results into one data frame
+combined_results_DCI_transplant <- bind_rows(unadjusted_results, adjusted_results)
+
+# Calculate Hazard Ratios (HR) and Confidence Intervals (CI)
+combined_results_DCI_transplant <- combined_results_DCI_transplant %>%
+  mutate(
+    HR = exp(estimate),
+    lower_CI = exp(estimate - 1.96 * std.error),
+    upper_CI = exp(estimate + 1.96 * std.error)
+  )
+
+# Print results
+library(dplyr)
+
+combined_results_DCI_transplant %>%
+  arrange(term, model) %>%
+  select(term, model, HR, lower_CI, upper_CI, p.value) %>%
+  rename(
+    Variable = term,
+    Model = model,
+    "Hazard Ratio (HR)" = HR,
+    "95% CI Lower" = lower_CI,
+    "95% CI Upper" = upper_CI,
+    "P-value" = p.value
+  )
+
+# Export to CSV
+write.csv(combined_results_DCI_transplant, file = "cox_model_results_dci.csv", row.names = FALSE)
+```
+##HR scatter plot - DCI transplant
+```{r}
+# Define the desired order for the x-axis
+desired_order <- c("DCI_decile1", "DCI_decile2", "DCI_decile3", "DCI_decile4", 
+                    "DCI_decile6", "DCI_decile7", "DCI_decile8", "DCI_decile9", 
+                    "DCI_decile10", "CAN_AGE_AT_LISTING", "CAN_GENDERM", "dial_time", "percentile_epts")
+
+# Convert 'term' to a factor with specified levels
+combined_results_DCI_transplant$term <- factor(combined_results_DCI_transplant$term, 
+                                               levels = desired_order)
+
+# Create the scatter plot with ordered x-axis
+HR_scatter_DCI_transplant <- ggplot(combined_results_DCI_transplant, aes(x = term, y = HR, color = model)) +
+  geom_point(aes(size = HR)) +
+  geom_errorbar(aes(ymin = lower_CI, ymax = upper_CI), width = 0.2) +
+  scale_y_log10() +  # Use log scale for better visualization of ratios
+  labs(
+    x = "Variable",
+    y = "Hazard Ratio (HR)",
+    title = "Scatter Plot of Hazard Ratios - DCI Transplant"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+HR_scatter_DCI_transplant
+```
+
+##HR forest plot - DCI transplant
+```{r}
+# Load necessary packages
+library(ggplot2)
+library(dplyr)
+
+# Define the desired order for the 'term' variable
+desired_order <- c("DCI_decile1", "DCI_decile2", "DCI_decile3", "DCI_decile4", "DCI_decile6", "DCI_decile7", "DCI_decile8",
+                    "DCI_decile9", "DCI_decile10", "CAN_AGE_AT_LISTING", "CAN_GENDERM", "dial_time", "percentile_epts")  # Ensure this list matches your unique terms
+
+# Convert 'term' to a factor with specified levels
+combined_results_DCI_transplant$term <- factor(combined_results_DCI_transplant$term, 
+                                               levels = desired_order)
+
+# Create the forest plot
+HR_forest_DCI_transplant <- ggplot(combined_results_DCI_transplant, aes(x = HR, ymin = lower_CI, ymax = upper_CI, color = model)) +
+  geom_pointrange(aes(y = term)) +
+  scale_x_log10() +  # Use log scale for better visualization of ratios
+  labs(
+    x = "Hazard Ratio (HR)",
+    y = "Variable",
+    title = "Forest Plot of Hazard Ratios - DCI Transplant"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    axis.text.y = element_text(size = 10)
+  )
+
+HR_forest_DCI_transplant
+```
+
+##DCI - death/deterioration
+```{r}
+# Convert SVM_decile to a factor and set the reference level to 5
+df_cand_kipa_w_scores$DCI_decile <- factor(df_cand_kipa_w_scores$DCI_decile, levels = c("5", setdiff(levels(df_cand_kipa_w_scores$DCI_decile), "5")))
+
+df_cand_kipa_w_scores$survival_time <- as.numeric(df_cand_kipa_w_scores$survival_time)
+df_cand_kipa_w_scores$time <- df_cand_kipa_w_scores$survival_time
+# Convert transplant_outcome to numeric (if needed)
+df_cand_kipa_w_scores$death_outcome <- as.numeric(df_cand_kipa_w_scores$death_outcome)
+
+# Directly copy transplant_outcome to status
+df_cand_kipa_w_scores$status <- df_cand_kipa_w_scores$death_outcome
+
+# Fit the unadjusted Cox model
+unadjusted_model <- coxph(Surv(time, status) ~ DCI_decile, data = df_cand_kipa_w_scores)
+
+# Fit the adjusted Cox model
+adjusted_model <- coxph(Surv(time, status) ~ DCI_decile + CAN_GENDER + CAN_AGE_AT_LISTING + dial_time + percentile_epts, data = df_cand_kipa_w_scores)
+
+# Load necessary packages
+library(broom)
+
+# Extract results using broom
+unadjusted_results <- tidy(unadjusted_model) %>%
+  select(term, estimate, std.error, p.value) %>%
+  mutate(model = "Unadjusted")
+
+adjusted_results <- tidy(adjusted_model) %>%
+  select(term, estimate, std.error, p.value) %>%
+  mutate(model = "Adjusted")
+
+# Combine results into one data frame
+combined_results_DCI_death <- bind_rows(unadjusted_results, adjusted_results)
+
+# Calculate Hazard Ratios (HR) and Confidence Intervals (CI)
+combined_results_DCI_death <- combined_results_DCI_death %>%
+  mutate(
+    HR = exp(estimate),
+    lower_CI = exp(estimate - 1.96 * std.error),
+    upper_CI = exp(estimate + 1.96 * std.error)
+  )
+
+# Print results
+library(dplyr)
+
+combined_results_DCI_death %>%
+  arrange(term, model) %>%
+  select(term, model, HR, lower_CI, upper_CI, p.value) %>%
+  rename(
+    Variable = term,
+    Model = model,
+    "Hazard Ratio (HR)" = HR,
+    "95% CI Lower" = lower_CI,
+    "95% CI Upper" = upper_CI,
+    "P-value" = p.value
+  )
+
+# Export to CSV
+write.csv(combined_results_DCI_death, file = "cox_model_results_dci2.csv", row.names = FALSE)
+```
+##HR scatter plot - DCI death/deterioration
+```{r}
+# Define the desired order for the x-axis
+desired_order <- c("DCI_decile1", "DCI_decile2", "DCI_decile3", "DCI_decile4", 
+                    "DCI_decile6", "DCI_decile7", "DCI_decile8", "DCI_decile9", 
+                    "DCI_decile10", "CAN_AGE_AT_LISTING", "CAN_GENDERM", "dial_time", "percentile_epts")
+
+# Convert 'term' to a factor with specified levels
+combined_results_DCI_death$term <- factor(combined_results_DCI_death$term, 
+                                               levels = desired_order)
+
+# Create the scatter plot with ordered x-axis
+HR_scatter_DCI_death <- ggplot(combined_results_DCI_death, aes(x = term, y = HR, color = model)) +
+  geom_point(aes(size = HR)) +
+  geom_errorbar(aes(ymin = lower_CI, ymax = upper_CI), width = 0.2) +
+  scale_y_log10() +  # Use log scale for better visualization of ratios
+  labs(
+    x = "Variable",
+    y = "Hazard Ratio (HR)",
+    title = "Scatter Plot of Hazard Ratios - DCI Death"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+HR_scatter_DCI_death
+```
+
+##HR forest plot - DCI death/deterioration
+```{r}
+# Load necessary packages
+library(ggplot2)
+library(dplyr)
+
+# Define the desired order for the 'term' variable
+desired_order <- c("DCI_decile1", "DCI_decile2", "DCI_decile3", "DCI_decile4", "DCI_decile6", "DCI_decile7", "DCI_decile8",
+                    "DCI_decile9", "DCI_decile10", "CAN_AGE_AT_LISTING", "CAN_GENDERM", "dial_time", "percentile_epts")  # Ensure this list matches your unique terms
+
+# Convert 'term' to a factor with specified levels
+combined_results_DCI_death$term <- factor(combined_results_DCI_death$term, 
+                                               levels = desired_order)
+
+# Create the forest plot
+HR_forest_DCI_death <- ggplot(combined_results_DCI_death, aes(x = HR, ymin = lower_CI, ymax = upper_CI, color = model)) +
+  geom_pointrange(aes(y = term)) +
+  scale_x_log10() +  # Use log scale for better visualization of ratios
+  labs(
+    x = "Hazard Ratio (HR)",
+    y = "Variable",
+    title = "Forest Plot of Hazard Ratios - DCI Death"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    axis.text.y = element_text(size = 10)
+  )
+
+HR_forest_DCI_death
+```
+```{r}
+library(gridExtra)
+
+grid.arrange(HR_scatter_SVM_transplant, HR_scatter_SVM_death, ncol = 2, nrow = 1)
+```
+
+
+```{r}
+grid.arrange(HR_scatter_SVI_transplant, HR_scatter_SVI_death, ncol = 2, nrow = 1)
+```
+
+
+```{r}
+grid.arrange(HR_scatter_ADI_transplant, HR_scatter_ADI_death, ncol = 2, nrow = 1)
+```
+
+
+```{r}
+grid.arrange(HR_scatter_DCI_transplant, HR_scatter_DCI_death, ncol = 2, nrow = 1)
+```
+
+
+```{r}
+grid.arrange(HR_forest_SVM_transplant, HR_forest_SVM_death, ncol = 2, nrow = 1)
+```
+
+
+```{r}
+grid.arrange(HR_forest_SVI_transplant, HR_forest_SVI_death, ncol = 2, nrow = 1)
+```
+
+
+```{r}
+grid.arrange(HR_forest_ADI_transplant, HR_forest_ADI_death, ncol = 2, nrow = 1)
+```
+
+
+```{r}
+grid.arrange(HR_forest_DCI_transplant, HR_forest_DCI_death,ncol = 2, nrow = 1)
+```
+
+
+
+
+```{r}
+rm(dd, model, new_data, plot_data, plot_data_ADI, plot_data_SVM, plot_data_SVI, plot_data_DCI, ADI_seq, DCI_seq, hr, lp, SVI_seq, SVM_seq, xlim_range, ylim_range)
+```
