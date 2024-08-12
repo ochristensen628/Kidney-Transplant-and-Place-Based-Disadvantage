@@ -1,54 +1,22 @@
 ---
-title: "Regressions"
+title: "hazard ratios by percentile"
 date: "2024-08-03"
 output: html_document
 ---
 
-##code from epts chunks -14,514 cases where death == 0 but death_outcome == 1. these should be be those removed for death/deterioration
+##code from epts chunks -14,514 cases where death == 0 but death_outcome == 1. these should be those removed for deterioration?
 ```{r}
 df_cand_kipa_w_scores %>% filter(death == 0) %>% filter(death_outcome == 1)
 ```
-```{r}
-df_cand_kipa_w_scores %>% filter(death_outcome == 1) %>% filter(transplant_outcome == 1) ##no overlap - this is good
-```
-
-
 
 ```{r}
-library(survival)
-
-my_time_1 <- df_cand_kipa_w_scores$survival_time
-my_status_1 <- df_cand_kipa_w_scores$transplant_outcome
-my_exposure_1 <- df_cand_kipa_w_scores$SVM_decile
-my_covariate1_1 <- df_cand_kipa_w_scores$CAN_AGE_AT_LISTING
-
-library(ggplot2)
-
-df_surv <- data.frame(
-  time = my_time_1,
-  status = my_status_1,
-  exposure = my_exposure_1,
-  covariate1 = my_covariate1_1
-)
-
-my_time_1 <- as.numeric(as.character(df_cand_kipa_w_scores$survival_time))
-my_status_1 <- as.numeric(as.character(df_cand_kipa_w_scores$transplant_outcome))
-my_eposure_1 <- as.numeric(as.character(df_cand_kipa_w_scores$SVM_decile))
-my_covariate1_1 <- as.numeric(as.character(df_cand_kipa_w_scores$CAN_AGE_AT_LISTING))
-
-# Unadjusted Cox model
-unadjusted_cox <- coxph(Surv(time, status) ~ exposure, data = df_surv)
-summary(unadjusted_cox)
-
-# Adjusted Cox model
-adjusted_cox <- coxph(Surv(time, status) ~ exposure + covariate1, data = df_surv)
-summary(adjusted_cox)
+df_cand_kipa_w_scores %>% filter(death_outcome == 1) %>% filter(transplant_outcome == 1) ##double check theres no overlap
 ```
 
-##ADI death/deterioration hazard ratio by decile
+##ADI death/deterioration hazard ratio
 ```{r}
 # Generate new data for prediction
-df_cand_kipa_w_scores$ADI_decile_num <- as.numeric(df_cand_kipa_w_scores$ADI_decile)
+df_cand_kipa_w_scores$ADI_percentile_num <- as.numeric(df_cand_kipa_w_scores$ADI_percentile)
 
 library(rms)
 
@@ -57,11 +25,11 @@ dd <- datadist(df_cand_kipa_w_scores)
 options(datadist = "dd")
 
 # Fit the Cox model with restricted cubic splines
-model <- cph(Surv(time, death_outcome) ~ rcs(ADI_decile_num, 4), data = df_cand_kipa_w_scores, x = TRUE, y = TRUE)
+model <- cph(Surv(time, death_outcome) ~ rcs(ADI_percentile_num, 4), data = df_cand_kipa_w_scores, x = TRUE, y = TRUE)
 
 
-new_data <- data.frame(ADI_decile_num = seq(min(df_cand_kipa_w_scores$ADI_decile_num, na.rm = TRUE),
-                                            max(df_cand_kipa_w_scores$ADI_decile_num, na.rm = TRUE),
+new_data <- data.frame(ADI_percentile_num = seq(min(df_cand_kipa_w_scores$ADI_percentile_num, na.rm = TRUE),
+                                            max(df_cand_kipa_w_scores$ADI_percentile_num, na.rm = TRUE),
                                             length.out = 100))
 # Predict the linear predictor
 lp <- predict(model, newdata = new_data, type = "lp")
@@ -71,39 +39,39 @@ hr <- exp(lp)
 
 # Create the data frame for plotting
 plot_data <- data.frame(
-  ADI_decile_num = new_data$ADI_decile_num,
+  ADI_percentile_num = new_data$ADI_percentile_num,
   Hazard_Ratio = hr
 )
 
 library(ggplot2)
 
-ggplot(plot_data, aes(x = ADI_decile_num, y = Hazard_Ratio)) +
+ggplot(plot_data, aes(x = ADI_percentile_num, y = Hazard_Ratio)) +
   geom_line() +
-  labs(title = "Hazard Ratio by ADI Decile",
-       x = "ADI Decile Number",
+  labs(title = "Hazard Ratio by ADI Percentile",
+       x = "ADI Percentile",
        y = "Hazard Ratio for Death / Deterioration") +
   theme_minimal()
 ```
 
-##set reference to ADI_decile = 5
+##set reference to 50th percentile (?)
 ```{r}
 # Load necessary libraries
 library(rms)
 library(ggplot2)
 
 # Convert decile column to numeric
-df_cand_kipa_w_scores$ADI_decile_num <- as.numeric(df_cand_kipa_w_scores$ADI_decile)
+df_cand_kipa_w_scores$ADI_percentile_num <- as.numeric(df_cand_kipa_w_scores$ADI_percentile)
 
 # Ensure the datadist is set up for the model
 dd <- datadist(df_cand_kipa_w_scores)
 options(datadist = "dd")
 
 # Fit the Cox model with restricted cubic splines
-model <- cph(Surv(time, death_outcome) ~ rcs(ADI_decile_num, 4), data = df_cand_kipa_w_scores, x = TRUE, y = TRUE)
+model <- cph(Surv(time, death_outcome) ~ rcs(ADI_percentile_num, 4), data = df_cand_kipa_w_scores, x = TRUE, y = TRUE)
 
 # Generate new data for prediction
-new_data <- data.frame(ADI_decile_num = seq(min(df_cand_kipa_w_scores$ADI_decile_num, na.rm = TRUE),
-                                            max(df_cand_kipa_w_scores$ADI_decile_num, na.rm = TRUE),
+new_data <- data.frame(ADI_percentile_num = seq(min(df_cand_kipa_w_scores$ADI_percentile_num, na.rm = TRUE),
+                                            max(df_cand_kipa_w_scores$ADI_percentile_num, na.rm = TRUE),
                                             length.out = 100))
 
 # Predict the linear predictor
@@ -113,47 +81,47 @@ lp <- predict(model, newdata = new_data, type = "lp")
 hr <- exp(lp)
 
 # Find the hazard ratio at the reference value (e.g., decile = 5)
-reference_value <- 5
-reference_hr <- hr[new_data$ADI_decile_num == reference_value]
+reference_value <- 50
+reference_hr <- hr[new_data$ADI_percentile_num == reference_value]
 
 # Adjust hazard ratios so that the reference value has an HR of 1
 hr_adjusted <- hr / reference_hr
 
 # Create the data frame for plotting
 plot_data <- data.frame(
-  ADI_decile_num = new_data$ADI_decile_num,
+  ADI_percentile_num = new_data$ADI_percentile_num,
   Hazard_Ratio = hr_adjusted
 )
 
 # Plot
-ggplot(plot_data, aes(x = ADI_decile_num, y = Hazard_Ratio)) +
+ggplot(plot_data, aes(x = ADI_percentile_num, y = Hazard_Ratio)) +
   geom_line() +
   geom_hline(yintercept = 1, linetype = "dashed", color = "red") +  # Add a reference line at HR = 1
-  labs(title = "Hazard Ratio by ADI Decile",
-       x = "ADI Decile Number",
+  labs(title = "Hazard Ratio by ADI Percentile",
+       x = "ADI Percentile",
        y = "Hazard Ratio for Death/Deterioration (Reference = 5)") +
   theme_minimal()
 
 ```
-##ADI transplant hazard ratio by decile
+##ADI transplant hazard ratio
 ```{r}
 # Load necessary libraries
 library(rms)
 library(ggplot2)
 
 # Convert decile column to numeric
-df_cand_kipa_w_scores$ADI_decile_num <- as.numeric(df_cand_kipa_w_scores$ADI_decile)
+df_cand_kipa_w_scores$ADI_percentile_num <- as.numeric(df_cand_kipa_w_scores$ADI_percentile)
 
 # Ensure the datadist is set up for the model
 dd <- datadist(df_cand_kipa_w_scores)
 options(datadist = "dd")
 
 # Fit the Cox model with restricted cubic splines
-model <- cph(Surv(time, transplant_outcome) ~ rcs(ADI_decile_num, 4), data = df_cand_kipa_w_scores, x = TRUE, y = TRUE)
+model <- cph(Surv(time, transplant_outcome) ~ rcs(ADI_percentile_num, 4), data = df_cand_kipa_w_scores, x = TRUE, y = TRUE)
 
 # Generate new data for prediction
-new_data <- data.frame(ADI_decile_num = seq(min(df_cand_kipa_w_scores$ADI_decile_num, na.rm = TRUE),
-                                            max(df_cand_kipa_w_scores$ADI_decile_num, na.rm = TRUE),
+new_data <- data.frame(ADI_percentile_num = seq(min(df_cand_kipa_w_scores$ADI_percentile_num, na.rm = TRUE),
+                                            max(df_cand_kipa_w_scores$ADI_percentile_num, na.rm = TRUE),
                                             length.out = 100))
 
 # Predict the linear predictor
@@ -163,47 +131,51 @@ lp <- predict(model, newdata = new_data, type = "lp")
 hr <- exp(lp)
 
 # Find the hazard ratio at the reference value (e.g., decile = 5)
-reference_value <- 5
-reference_hr <- hr[new_data$ADI_decile_num == reference_value]
+reference_value <- 50
+reference_hr <- hr[new_data$ADI_percentile_num == reference_value]
 
 # Adjust hazard ratios so that the reference value has an HR of 1
 hr_adjusted <- hr / reference_hr
 
 # Create the data frame for plotting
 plot_data <- data.frame(
-  ADI_decile_num = new_data$ADI_decile_num,
+  ADI_percentile_num = new_data$ADI_percentile_num,
   Hazard_Ratio = hr_adjusted
 )
 
 # Plot
-ggplot(plot_data, aes(x = ADI_decile_num, y = Hazard_Ratio)) +
+ggplot(plot_data, aes(x = ADI_percentile_num, y = Hazard_Ratio)) +
   geom_line() +
   geom_hline(yintercept = 1, linetype = "dashed", color = "red") +  # Add a reference line at HR = 1
-  labs(title = "Hazard Ratio by ADI Decile",
-       x = "ADI Decile Number",
-       y = "Hazard Ratio for Transplant (Reference = 5)") +
+  labs(title = "Hazard Ratio by ADI Percentile",
+       x = "ADI Percentile",
+       y = "Hazard Ratio for Transplant (Reference = 50)") +
   theme_minimal()
 
 ```
-##SVM death/deterioration hazard ratio by decile
+
+##SVM death/deterioration hazard ratio
 ```{r}
 # Load necessary libraries
 library(rms)
 library(ggplot2)
 
 # Convert decile column to numeric
-df_cand_kipa_w_scores$SVM_decile_num <- as.numeric(df_cand_kipa_w_scores$SVM_decile)
+library(dplyr)
+
+# Convert decile column to numeric
+df_cand_kipa_w_scores$SVM_percentile_num <- as.numeric(df_cand_kipa_w_scores$SVM_PERCENTILE)
 
 # Ensure the datadist is set up for the model
 dd <- datadist(df_cand_kipa_w_scores)
 options(datadist = "dd")
 
 # Fit the Cox model with restricted cubic splines
-model <- cph(Surv(time, death_outcome) ~ rcs(SVM_decile_num, 4), data = df_cand_kipa_w_scores, x = TRUE, y = TRUE)
+model <- cph(Surv(time, death_outcome) ~ rcs(SVM_percentile_num, 4), data = df_cand_kipa_w_scores, x = TRUE, y = TRUE)
 
 # Generate new data for prediction
-new_data <- data.frame(SVM_decile_num = seq(min(df_cand_kipa_w_scores$SVM_decile_num, na.rm = TRUE),
-                                            max(df_cand_kipa_w_scores$SVM_decile_num, na.rm = TRUE),
+new_data <- data.frame(SVM_percentile_num = seq(min(df_cand_kipa_w_scores$SVM_percentile_num, na.rm = TRUE),
+                                            max(df_cand_kipa_w_scores$SVM_percentile_num, na.rm = TRUE),
                                             length.out = 100))
 
 # Predict the linear predictor
@@ -213,46 +185,58 @@ lp <- predict(model, newdata = new_data, type = "lp")
 hr <- exp(lp)
 
 # Find the hazard ratio at the reference value (e.g., decile = 5)
-reference_value <- 5
-reference_hr <- hr[new_data$SVM_decile_num == reference_value]
+reference_value <- 49.339293
+tolerance <- 1e-6
 
-# Adjust hazard ratios so that the reference value has an HR of 1
-hr_adjusted <- hr / reference_hr
+# Find the closest value in new_data
+closest_index <- which.min(abs(new_data$SVM_percentile_num - reference_value))
+closest_value <- new_data$SVM_percentile_num[closest_index]
 
-# Create the data frame for plotting
-plot_data <- data.frame(
-  SVM_decile_num = new_data$SVM_decile_num,
-  Hazard_Ratio = hr_adjusted
-)
+# Ensure closest_index is valid and handle precision
+if (length(closest_index) > 0 && abs(closest_value - reference_value) < tolerance) {
+  reference_hr <- hr[closest_index]
+  
 
-# Plot
-ggplot(plot_data, aes(x = SVM_decile_num, y = Hazard_Ratio)) +
-  geom_line() +
-  geom_hline(yintercept = 1, linetype = "dashed", color = "red") +  # Add a reference line at HR = 1
-  labs(title = "Hazard Ratio by SVM Decile",
-       x = "SVM Decile Number",
-       y = "Hazard Ratio of Death/Deterioration (Reference = 5)") +
-  theme_minimal()
+  # Adjust hazard ratios
+  hr_adjusted <- hr / reference_hr
+  
+  # Create the data frame for plotting
+  plot_data <- data.frame(
+    SVM_percentile_num = new_data$SVM_percentile_num,
+    Hazard_Ratio = hr_adjusted
+  )
+  
+  # Plot
+  ggplot(plot_data, aes(x = SVM_percentile_num, y = Hazard_Ratio)) +
+    geom_line() +
+    geom_hline(yintercept = 1, linetype = "dashed", color = "red") +  # Add a reference line at HR = 1
+    labs(title = "Hazard Ratio by SVM Percentile",
+         x = "SVM Percentile",
+         y = "Hazard Ratio of Death/Deterioration (Reference = 49.34)") +
+    theme_minimal()
+} else {
+  cat("Reference value or closest value not found in new_data.\n")
+}
 ```
-##SVM transplant hazard ratio by decile
+##SVM transplant hazard ratio
 ```{r}
 # Load necessary libraries
 library(rms)
 library(ggplot2)
 
 # Convert decile column to numeric
-df_cand_kipa_w_scores$SVM_decile_num <- as.numeric(df_cand_kipa_w_scores$SVM_decile)
+df_cand_kipa_w_scores$SVM_percentile_num <- as.numeric(df_cand_kipa_w_scores$SVM_PERCENTILE)
 
 # Ensure the datadist is set up for the model
 dd <- datadist(df_cand_kipa_w_scores)
 options(datadist = "dd")
 
 # Fit the Cox model with restricted cubic splines
-model <- cph(Surv(time, transplant_outcome) ~ rcs(SVM_decile_num, 4), data = df_cand_kipa_w_scores, x = TRUE, y = TRUE)
+model <- cph(Surv(time, transplant_outcome) ~ rcs(SVM_percentile_num, 4), data = df_cand_kipa_w_scores, x = TRUE, y = TRUE)
 
 # Generate new data for prediction
-new_data <- data.frame(SVM_decile_num = seq(min(df_cand_kipa_w_scores$SVM_decile_num, na.rm = TRUE),
-                                            max(df_cand_kipa_w_scores$SVM_decile_num, na.rm = TRUE),
+new_data <- data.frame(SVM_percentile_num = seq(min(df_cand_kipa_w_scores$SVM_percentile_num, na.rm = TRUE),
+                                            max(df_cand_kipa_w_scores$SVM_percentile_num, na.rm = TRUE),
                                             length.out = 100))
 
 # Predict the linear predictor
@@ -262,46 +246,117 @@ lp <- predict(model, newdata = new_data, type = "lp")
 hr <- exp(lp)
 
 # Find the hazard ratio at the reference value (e.g., decile = 5)
-reference_value <- 5
-reference_hr <- hr[new_data$SVM_decile_num == reference_value]
+reference_value <- 49.339293
+tolerance <- 1e-6
 
-# Adjust hazard ratios so that the reference value has an HR of 1
-hr_adjusted <- hr / reference_hr
+# Find the closest value in new_data
+closest_index <- which.min(abs(new_data$SVM_percentile_num - reference_value))
+closest_value <- new_data$SVM_percentile_num[closest_index]
 
-# Create the data frame for plotting
-plot_data <- data.frame(
-  SVM_decile_num = new_data$SVM_decile_num,
-  Hazard_Ratio = hr_adjusted
-)
+# Ensure closest_index is valid and handle precision
+if (length(closest_index) > 0 && abs(closest_value - reference_value) < tolerance) {
+  reference_hr <- hr[closest_index]
+  
 
-# Plot
-ggplot(plot_data, aes(x = SVM_decile_num, y = Hazard_Ratio)) +
-  geom_line() +
-  geom_hline(yintercept = 1, linetype = "dashed", color = "red") +  # Add a reference line at HR = 1
-  labs(title = "Hazard Ratio by SVM Decile",
-       x = "SVM Decile Number",
-       y = "Hazard Ratio of Transplant (Reference = 5)") +
-  theme_minimal()
+  # Adjust hazard ratios
+  hr_adjusted <- hr / reference_hr
+  
+  # Create the data frame for plotting
+  plot_data <- data.frame(
+    SVM_percentile_num = new_data$SVM_percentile_num,
+    Hazard_Ratio = hr_adjusted
+  )
+  
+  # Plot
+  ggplot(plot_data, aes(x = SVM_percentile_num, y = Hazard_Ratio)) +
+    geom_line() +
+    geom_hline(yintercept = 1, linetype = "dashed", color = "red") +  # Add a reference line at HR = 1
+    labs(title = "Hazard Ratio by SVM Percentile",
+         x = "SVM Percentile",
+         y = "Hazard Ratio of Transplant (Reference = 49.34)") +
+    theme_minimal()
+} else {
+  cat("Reference value or closest value not found in new_data.\n")
+}
 ```
+```{r}
+# Calculate the proportion for each decile
+proportions <- df_cand_kipa_w_scores %>%
+  group_by(SVM_decile) %>%
+  summarize(
+    total_count = n(),
+    outcome_count = sum(transplant_outcome == 1),
+    proportion = outcome_count / total_count
+  )
+
+# Extract proportions for SVM_decile = 1 and SVM_decile = 10
+prop_decile_1 <- proportions %>%
+  filter(SVM_decile == 1) %>%
+  pull(proportion)
+
+prop_decile_10 <- proportions %>%
+  filter(SVM_decile == 10) %>%
+  pull(proportion)
+
+# Print results
+cat("Proportion of candidates with SVM_decile = 1 and transplant_outcome = 1:", prop_decile_1, "\n")
+cat("Proportion of candidates with SVM_decile = 10 and transplant_outcome = 1:", prop_decile_10, "\n")
+
+# If you want the relative proportion comparison
+relative_proportion <- prop_decile_1 / prop_decile_10
+cat("Relative proportion (Decile 1 vs Decile 10):", relative_proportion, "\n")
+
+```
+
+```{r}
+# Calculate the proportion for each decile
+proportions <- df_cand_kipa_w_scores %>%
+  group_by(SVM_decile) %>%
+  summarize(
+    total_count = n(),
+    outcome_count = sum(death_outcome == 1),
+    proportion = outcome_count / total_count
+  )
+
+# Extract proportions for SVM_decile = 1 and SVM_decile = 10
+prop_decile_1 <- proportions %>%
+  filter(SVM_decile == 1) %>%
+  pull(proportion)
+
+prop_decile_10 <- proportions %>%
+  filter(SVM_decile == 10) %>%
+  pull(proportion)
+
+# Print results
+cat("Proportion of candidates with SVM_decile = 1 and death_outcome = 1:", prop_decile_1, "\n")
+cat("Proportion of candidates with SVM_decile = 10 and death_outcome = 1:", prop_decile_10, "\n")
+
+# If you want the relative proportion comparison
+relative_proportion <- prop_decile_1 / prop_decile_10
+cat("Relative proportion (Decile 1 vs Decile 10):", relative_proportion, "\n")
+
+```
+
+##SVI death/deterioration hazard ratio 
+```{r}
 ##SVI death/deterioration hazard ratio by decile
-```{r}
 # Load necessary libraries
 library(rms)
 library(ggplot2)
 
 # Convert decile column to numeric
-df_cand_kipa_w_scores$SVI_decile_num <- as.numeric(df_cand_kipa_w_scores$SVI_decile)
+df_cand_kipa_w_scores$SVI_percentile_num <- as.numeric(df_cand_kipa_w_scores$SVI_percentile)
 
 # Ensure the datadist is set up for the model
 dd <- datadist(df_cand_kipa_w_scores)
 options(datadist = "dd")
 
 # Fit the Cox model with restricted cubic splines
-model <- cph(Surv(time, death_outcome) ~ rcs(SVI_decile_num, 4), data = df_cand_kipa_w_scores, x = TRUE, y = TRUE)
+model <- cph(Surv(time, death_outcome) ~ rcs(SVI_percentile_num, 4), data = df_cand_kipa_w_scores, x = TRUE, y = TRUE)
 
 # Generate new data for prediction
-new_data <- data.frame(SVI_decile_num = seq(min(df_cand_kipa_w_scores$SVI_decile_num, na.rm = TRUE),
-                                            max(df_cand_kipa_w_scores$SVI_decile_num, na.rm = TRUE),
+new_data <- data.frame(SVI_percentile_num = seq(min(df_cand_kipa_w_scores$SVI_percentile_num, na.rm = TRUE),
+                                            max(df_cand_kipa_w_scores$SVI_percentile_num, na.rm = TRUE),
                                             length.out = 100))
 
 # Predict the linear predictor
@@ -311,46 +366,87 @@ lp <- predict(model, newdata = new_data, type = "lp")
 hr <- exp(lp)
 
 # Find the hazard ratio at the reference value (e.g., decile = 5)
-reference_value <- 5
-reference_hr <- hr[new_data$SVI_decile_num == reference_value]
+reference_value <- 49.540404
+tolerance <- 1e-6
 
-# Adjust hazard ratios so that the reference value has an HR of 1
-hr_adjusted <- hr / reference_hr
+# Find the closest value in new_data
+closest_index <- which.min(abs(new_data$SVI_percentile_num - reference_value))
+closest_value <- new_data$SVI_percentile_num[closest_index]
 
-# Create the data frame for plotting
-plot_data <- data.frame(
-  SVI_decile_num = new_data$SVI_decile_num,
-  Hazard_Ratio = hr_adjusted
-)
+# Ensure closest_index is valid and handle precision
+if (length(closest_index) > 0 && abs(closest_value - reference_value) < tolerance) {
+  reference_hr <- hr[closest_index]
+  
 
-# Plot
-ggplot(plot_data, aes(x = SVI_decile_num, y = Hazard_Ratio)) +
-  geom_line() +
-  geom_hline(yintercept = 1, linetype = "dashed", color = "red") +  # Add a reference line at HR = 1
-  labs(title = "Hazard Ratio by SVI Decile",
-       x = "SVI Decile Number",
-       y = "Hazard Ratio for Death/Deterioration (Reference = 5)") +
-  theme_minimal()
+  # Adjust hazard ratios
+  hr_adjusted <- hr / reference_hr
+  
+  # Create the data frame for plotting
+  plot_data <- data.frame(
+    SVI_percentile_num = new_data$SVI_percentile_num,
+    Hazard_Ratio = hr_adjusted
+  )
+  
+  # Plot
+  ggplot(plot_data, aes(x = SVI_percentile_num, y = Hazard_Ratio)) +
+    geom_line() +
+    geom_hline(yintercept = 1, linetype = "dashed", color = "red") +  # Add a reference line at HR = 1
+    labs(title = "Hazard Ratio by SVI Percentile",
+         x = "SVI Percentile",
+         y = "Hazard Ratio of Death/Deterioration (Reference = 49.53)") +
+    theme_minimal()
+} else {
+  cat("Reference value or closest value not found in new_data.\n")
+}
 ```
-##SVI transplant hazard ratio by decile
+```{r}
+# Calculate the proportion for each decile
+proportions <- df_cand_kipa_w_scores %>%
+  group_by(SVI_decile) %>%
+  summarize(
+    total_count = n(),
+    outcome_count = sum(death_outcome == 1),
+    proportion = outcome_count / total_count
+  )
+
+# Extract proportions for SVI_decile = 1 and SVI_decile = 10
+prop_decile_1 <- proportions %>%
+  filter(SVI_decile == 1) %>%
+  pull(proportion)
+
+prop_decile_10 <- proportions %>%
+  filter(SVI_decile == 10) %>%
+  pull(proportion)
+
+# Print results
+cat("Proportion of candidates with SVI_decile = 1 and death_outcome = 1:", prop_decile_1, "\n")
+cat("Proportion of candidates with SVI_decile = 10 and death_outcome = 1:", prop_decile_10, "\n")
+
+# If you want the relative proportion comparison
+relative_proportion <- prop_decile_1 / prop_decile_10
+cat("Relative proportion (Decile 1 vs Decile 10):", relative_proportion, "\n")
+
+```
+
+##SVI transplant hazard ratio
 ```{r}
 # Load necessary libraries
 library(rms)
 library(ggplot2)
 
 # Convert decile column to numeric
-df_cand_kipa_w_scores$SVI_decile_num <- as.numeric(df_cand_kipa_w_scores$SVI_decile)
+df_cand_kipa_w_scores$SVI_percentile_num <- as.numeric(df_cand_kipa_w_scores$SVI_percentile)
 
 # Ensure the datadist is set up for the model
 dd <- datadist(df_cand_kipa_w_scores)
 options(datadist = "dd")
 
 # Fit the Cox model with restricted cubic splines
-model <- cph(Surv(time, transplant_outcome) ~ rcs(SVI_decile_num, 4), data = df_cand_kipa_w_scores, x = TRUE, y = TRUE)
+model <- cph(Surv(time, transplant_outcome) ~ rcs(SVI_percentile_num, 4), data = df_cand_kipa_w_scores, x = TRUE, y = TRUE)
 
 # Generate new data for prediction
-new_data <- data.frame(SVI_decile_num = seq(min(df_cand_kipa_w_scores$SVI_decile_num, na.rm = TRUE),
-                                            max(df_cand_kipa_w_scores$SVI_decile_num, na.rm = TRUE),
+new_data <- data.frame(SVI_percentile_num = seq(min(df_cand_kipa_w_scores$SVI_percentile_num, na.rm = TRUE),
+                                            max(df_cand_kipa_w_scores$SVI_percentile_num, na.rm = TRUE),
                                             length.out = 100))
 
 # Predict the linear predictor
@@ -360,46 +456,87 @@ lp <- predict(model, newdata = new_data, type = "lp")
 hr <- exp(lp)
 
 # Find the hazard ratio at the reference value (e.g., decile = 5)
-reference_value <- 5
-reference_hr <- hr[new_data$SVI_decile_num == reference_value]
+reference_value <- 49.540404
+tolerance <- 1e-6
 
-# Adjust hazard ratios so that the reference value has an HR of 1
-hr_adjusted <- hr / reference_hr
+# Find the closest value in new_data
+closest_index <- which.min(abs(new_data$SVI_percentile_num - reference_value))
+closest_value <- new_data$SVI_percentile_num[closest_index]
 
-# Create the data frame for plotting
-plot_data <- data.frame(
-  SVI_decile_num = new_data$SVI_decile_num,
-  Hazard_Ratio = hr_adjusted
-)
+# Ensure closest_index is valid and handle precision
+if (length(closest_index) > 0 && abs(closest_value - reference_value) < tolerance) {
+  reference_hr <- hr[closest_index]
+  
 
-# Plot
-ggplot(plot_data, aes(x = SVI_decile_num, y = Hazard_Ratio)) +
-  geom_line() +
-  geom_hline(yintercept = 1, linetype = "dashed", color = "red") +  # Add a reference line at HR = 1
-  labs(title = "Hazard Ratio of Transplant by SVI Decile",
-       x = "SVI Decile Number",
-       y = "Hazard Ratio of Transplant (Reference = 5)") +
-  theme_minimal()
+  # Adjust hazard ratios
+  hr_adjusted <- hr / reference_hr
+  
+  # Create the data frame for plotting
+  plot_data <- data.frame(
+    SVI_percentile_num = new_data$SVI_percentile_num,
+    Hazard_Ratio = hr_adjusted
+  )
+  
+  # Plot
+  ggplot(plot_data, aes(x = SVI_percentile_num, y = Hazard_Ratio)) +
+    geom_line() +
+    geom_hline(yintercept = 1, linetype = "dashed", color = "red") +  # Add a reference line at HR = 1
+    labs(title = "Hazard Ratio by SVI Percentile",
+         x = "SVI Percentile",
+         y = "Hazard Ratio of Transplant (Reference = 49.53)") +
+    theme_minimal()
+} else {
+  cat("Reference value or closest value not found in new_data.\n")
+}
 ```
-##DCI death/deterioration hazard ratio by decile
+```{r}
+# Calculate the proportion for each decile
+proportions <- df_cand_kipa_w_scores %>%
+  group_by(SVI_decile) %>%
+  summarize(
+    total_count = n(),
+    outcome_count = sum(transplant_outcome == 1),
+    proportion = outcome_count / total_count
+  )
+
+# Extract proportions for SVI_decile = 1 and SVI_decile = 10
+prop_decile_1 <- proportions %>%
+  filter(SVI_decile == 1) %>%
+  pull(proportion)
+
+prop_decile_10 <- proportions %>%
+  filter(SVI_decile == 10) %>%
+  pull(proportion)
+
+# Print results
+cat("Proportion of candidates with SVI_decile = 1 and transplant_outcome = 1:", prop_decile_1, "\n")
+cat("Proportion of candidates with SVI_decile = 10 and transplant_outcome = 1:", prop_decile_10, "\n")
+
+# If you want the relative proportion comparison
+relative_proportion <- prop_decile_1 / prop_decile_10
+cat("Relative proportion (Decile 1 vs Decile 10):", relative_proportion, "\n")
+
+```
+
+##DCI death/deterioration hazard ratio 
 ```{r}
 # Load necessary libraries
 library(rms)
 library(ggplot2)
 
 # Convert decile column to numeric
-df_cand_kipa_w_scores$DCI_decile_num <- as.numeric(df_cand_kipa_w_scores$DCI_decile)
+df_cand_kipa_w_scores$DCI_percentile_num <- as.numeric(df_cand_kipa_w_scores$dci_percentile)
 
 # Ensure the datadist is set up for the model
 dd <- datadist(df_cand_kipa_w_scores)
 options(datadist = "dd")
 
 # Fit the Cox model with restricted cubic splines
-model <- cph(Surv(time, death_outcome) ~ rcs(DCI_decile_num, 4), data = df_cand_kipa_w_scores, x = TRUE, y = TRUE)
+model <- cph(Surv(time, death_outcome) ~ rcs(DCI_percentile_num, 4), data = df_cand_kipa_w_scores, x = TRUE, y = TRUE)
 
 # Generate new data for prediction
-new_data <- data.frame(DCI_decile_num = seq(min(df_cand_kipa_w_scores$DCI_decile_num, na.rm = TRUE),
-                                            max(df_cand_kipa_w_scores$DCI_decile_num, na.rm = TRUE),
+new_data <- data.frame(DCI_percentile_num = seq(min(df_cand_kipa_w_scores$DCI_percentile_num, na.rm = TRUE),
+                                            max(df_cand_kipa_w_scores$DCI_percentile_num, na.rm = TRUE),
                                             length.out = 100))
 
 # Predict the linear predictor
@@ -409,46 +546,58 @@ lp <- predict(model, newdata = new_data, type = "lp")
 hr <- exp(lp)
 
 # Find the hazard ratio at the reference value (e.g., decile = 5)
-reference_value <- 5
-reference_hr <- hr[new_data$DCI_decile_num == reference_value]
+reference_value <- 49.494990
+tolerance <- 1e-6
 
-# Adjust hazard ratios so that the reference value has an HR of 1
-hr_adjusted <- hr / reference_hr
+# Find the closest value in new_data
+closest_index <- which.min(abs(new_data$DCI_percentile_num - reference_value))
+closest_value <- new_data$DCI_percentile_num[closest_index]
 
-# Create the data frame for plotting
-plot_data <- data.frame(
-  DCI_decile_num = new_data$DCI_decile_num,
-  Hazard_Ratio = hr_adjusted
-)
+# Ensure closest_index is valid and handle precision
+if (length(closest_index) > 0 && abs(closest_value - reference_value) < tolerance) {
+  reference_hr <- hr[closest_index]
+  
 
-# Plot
-ggplot(plot_data, aes(x = DCI_decile_num, y = Hazard_Ratio)) +
-  geom_line() +
-  geom_hline(yintercept = 1, linetype = "dashed", color = "red") +  # Add a reference line at HR = 1
-  labs(title = "Hazard Ratio by DCI Decile",
-       x = "DCI Decile Number",
-       y = "Hazard Ratio of Death/Deterioration (Reference = 5)") +
-  theme_minimal()
+  # Adjust hazard ratios
+  hr_adjusted <- hr / reference_hr
+  
+  # Create the data frame for plotting
+  plot_data <- data.frame(
+    DCI_percentile_num = new_data$DCI_percentile_num,
+    Hazard_Ratio = hr_adjusted
+  )
+  
+  # Plot
+  ggplot(plot_data, aes(x = DCI_percentile_num, y = Hazard_Ratio)) +
+    geom_line() +
+    geom_hline(yintercept = 1, linetype = "dashed", color = "red") +  # Add a reference line at HR = 1
+    labs(title = "Hazard Ratio by DCI Percentile",
+         x = "DCI Percentile",
+         y = "Hazard Ratio of Death/Deterioration (Reference = 49.49)") +
+    theme_minimal()
+} else {
+  cat("Reference value or closest value not found in new_data.\n")
+}
 ```
-##DCI transplant hazard ratio by decile
+##DCI transplant hazard ratio
 ```{r}
 # Load necessary libraries
 library(rms)
 library(ggplot2)
 
 # Convert decile column to numeric
-df_cand_kipa_w_scores$DCI_decile_num <- as.numeric(df_cand_kipa_w_scores$DCI_decile)
+df_cand_kipa_w_scores$DCI_percentile_num <- as.numeric(df_cand_kipa_w_scores$dci_percentile)
 
 # Ensure the datadist is set up for the model
 dd <- datadist(df_cand_kipa_w_scores)
 options(datadist = "dd")
 
 # Fit the Cox model with restricted cubic splines
-model <- cph(Surv(time, transplant_outcome) ~ rcs(DCI_decile_num, 4), data = df_cand_kipa_w_scores, x = TRUE, y = TRUE)
+model <- cph(Surv(time, transplant_outcome) ~ rcs(DCI_percentile_num, 4), data = df_cand_kipa_w_scores, x = TRUE, y = TRUE)
 
 # Generate new data for prediction
-new_data <- data.frame(DCI_decile_num = seq(min(df_cand_kipa_w_scores$DCI_decile_num, na.rm = TRUE),
-                                            max(df_cand_kipa_w_scores$DCI_decile_num, na.rm = TRUE),
+new_data <- data.frame(DCI_percentile_num = seq(min(df_cand_kipa_w_scores$DCI_percentile_num, na.rm = TRUE),
+                                            max(df_cand_kipa_w_scores$DCI_percentile_num, na.rm = TRUE),
                                             length.out = 100))
 
 # Predict the linear predictor
@@ -458,65 +607,62 @@ lp <- predict(model, newdata = new_data, type = "lp")
 hr <- exp(lp)
 
 # Find the hazard ratio at the reference value (e.g., decile = 5)
-reference_value <- 5
-reference_hr <- hr[new_data$DCI_decile_num == reference_value]
+tolerance <- 1e-6
 
-# Adjust hazard ratios so that the reference value has an HR of 1
-hr_adjusted <- hr / reference_hr
+# Find the closest value in new_data
+closest_index <- which.min(abs(new_data$DCI_percentile_num - reference_value))
+closest_value <- new_data$DCI_percentile_num[closest_index]
 
-# Create the data frame for plotting
-plot_data <- data.frame(
-  DCI_decile_num = new_data$DCI_decile_num,
-  Hazard_Ratio = hr_adjusted
-)
+# Ensure closest_index is valid and handle precision
+if (length(closest_index) > 0 && abs(closest_value - reference_value) < tolerance) {
+  reference_hr <- hr[closest_index]
+  
 
-# Plot
-ggplot(plot_data, aes(x = DCI_decile_num, y = Hazard_Ratio)) +
-  geom_line() +
-  geom_hline(yintercept = 1, linetype = "dashed", color = "red") +  # Add a reference line at HR = 1
-  labs(title = "Hazard Ratio by DCI Decile",
-       x = "DCI Decile Number",
-       y = "Hazard Ratio (Reference = 5)") +
-  theme_minimal()
+  # Adjust hazard ratios
+  hr_adjusted <- hr / reference_hr
+  
+  # Create the data frame for plotting
+  plot_data <- data.frame(
+    DCI_percentile_num = new_data$DCI_percentile_num,
+    Hazard_Ratio = hr_adjusted
+  )
+  
+  # Plot
+  ggplot(plot_data, aes(x = DCI_percentile_num, y = Hazard_Ratio)) +
+    geom_line() +
+    geom_hline(yintercept = 1, linetype = "dashed", color = "red") +  # Add a reference line at HR = 1
+    labs(title = "Hazard Ratio by DCI Percentile",
+         x = "DCI Percentile",
+         y = "Hazard Ratio of Transplant (Reference = 49.49)") +
+    theme_minimal()
+} else {
+  cat("Reference value or closest value not found in new_data.\n")
+}
 ```
 
-```{r}
-install.packages("patchwork")
-
-```
 ```{r}
 library(ggplot2)
 library(patchwork)
-
 ```
 
-##plot including all 4 indices - death/deterioration
+##all 4 on 1 plot - Death/Deterioration
 ```{r}
-# Load necessary libraries
-library(rms)
-library(ggplot2)
-library(dplyr)
-
-# Define a function to generate hazard ratio data for different deciles
-generate_plot_data <- function(decile_col, reference_value = 5) {
-  # Convert decile column to numeric
-  df_cand_kipa_w_scores[[paste0(decile_col, "_num")]] <- as.numeric(df_cand_kipa_w_scores[[decile_col]])
-
+predict_and_plot_hr <- function(data, percentile_var, reference_value, tolerance = 1e-6) {
   # Ensure the datadist is set up for the model
-  dd <- datadist(df_cand_kipa_w_scores)
+  dd <- datadist(data)
   options(datadist = "dd")
 
+  # Create a formula with dynamic percentile_var
+  formula <- as.formula(paste("Surv(time, death_outcome) ~ rcs(", percentile_var, ", 4)"))
+
   # Fit the Cox model with restricted cubic splines
-  formula <- as.formula(paste("Surv(time, death_outcome) ~ rcs(", paste0(decile_col, "_num"), ", 4)"))
-  model <- cph(formula, data = df_cand_kipa_w_scores, x = TRUE, y = TRUE)
+  model <- cph(formula, data = data, x = TRUE, y = TRUE)
 
   # Generate new data for prediction
-  new_data <- data.frame(
-    Decile = seq(min(df_cand_kipa_w_scores[[paste0(decile_col, "_num")]], na.rm = TRUE),
-                 max(df_cand_kipa_w_scores[[paste0(decile_col, "_num")]], na.rm = TRUE),
-                 length.out = 100)
-  )
-  names(new_data) <- paste0(decile_col, "_num")
+  new_data <- data.frame(seq(min(data[[percentile_var]], na.rm = TRUE),
+                             max(data[[percentile_var]], na.rm = TRUE),
+                             length.out = 100))
+  colnames(new_data) <- percentile_var
 
   # Predict the linear predictor
   lp <- predict(model, newdata = new_data, type = "lp")
@@ -524,52 +670,423 @@ generate_plot_data <- function(decile_col, reference_value = 5) {
   # Predict hazard ratios
   hr <- exp(lp)
 
-  # Find the hazard ratio at the reference value (e.g., decile = 5)
-  reference_hr <- hr[new_data[[paste0(decile_col, "_num")]] == reference_value]
+  # Find the hazard ratio at the reference value
+  closest_index <- which.min(abs(new_data[[percentile_var]] - reference_value))
+  closest_value <- new_data[[percentile_var]][closest_index]
 
-  # Adjust hazard ratios so that the reference value has an HR of 1
+  # Ensure closest_index is valid and handle precision
+  if (length(closest_index) > 0 && abs(closest_value - reference_value) < tolerance) {
+    reference_hr <- hr[closest_index]
+    hr_adjusted <- hr / reference_hr
+
+    # Create the data frame for plotting
+    plot_data <- data.frame(
+      Percentile = new_data[[percentile_var]],
+      Hazard_Ratio = hr_adjusted,
+      Variable = percentile_var
+    )
+    
+    return(plot_data)
+  } else {
+    cat("Reference value or closest value not found in new_data.\n")
+    return(NULL)
+  }
+}
+
+```
+
+
+```{r}
+# Define the variables and their reference values
+variables <- list(
+  list(var = "ADI_percentile_num", ref = 50),
+  list(var = "SVM_percentile_num", ref = 49.339293),
+  list(var = "SVI_percentile_num", ref = 49.540404),
+  list(var = "DCI_percentile_num", ref = 49.494990)
+)
+
+# Use lapply to apply the function to each variable
+plot_data_list <- lapply(variables, function(x) predict_and_plot_hr(df_cand_kipa_w_scores, x$var, x$ref))
+
+# Combine all data frames into one
+combined_plot_data <- do.call(rbind, plot_data_list)
+
+# Plot
+ggplot(combined_plot_data, aes(x = Percentile, y = Hazard_Ratio, color = Variable)) +
+  geom_line() +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "red") +  # Add a reference line at HR = 1
+  labs(title = "Hazard Ratio by Percentile for Different Variables",
+       x = "Percentile",
+       y = "Hazard Ratio of Death/Deterioration (Reference = Specified Value)") +
+  theme_minimal() +
+  scale_color_manual(values = c("ADI_percentile_num" = "red", 
+                                "SVM_percentile_num" = "purple",
+                                "SVI_percentile_num" = "blue",
+                                "DCI_percentile_num" = "green"))
+
+```
+
+##all 4 on 1 plot - Transplant
+```{r}
+predict_and_plot_hr <- function(data, percentile_var, reference_value, tolerance = 1e-6) {
+  # Ensure the datadist is set up for the model
+  dd <- datadist(data)
+  options(datadist = "dd")
+
+  # Create a formula with dynamic percentile_var
+  formula <- as.formula(paste("Surv(time, transplant_outcome) ~ rcs(", percentile_var, ", 4)"))
+
+  # Fit the Cox model with restricted cubic splines
+  model <- cph(formula, data = data, x = TRUE, y = TRUE)
+
+  # Generate new data for prediction
+  new_data <- data.frame(seq(min(data[[percentile_var]], na.rm = TRUE),
+                             max(data[[percentile_var]], na.rm = TRUE),
+                             length.out = 100))
+  colnames(new_data) <- percentile_var
+
+  # Predict the linear predictor
+  lp <- predict(model, newdata = new_data, type = "lp")
+
+  # Predict hazard ratios
+  hr <- exp(lp)
+
+  # Find the hazard ratio at the reference value
+  closest_index <- which.min(abs(new_data[[percentile_var]] - reference_value))
+  closest_value <- new_data[[percentile_var]][closest_index]
+
+  # Ensure closest_index is valid and handle precision
+  if (length(closest_index) > 0 && abs(closest_value - reference_value) < tolerance) {
+    reference_hr <- hr[closest_index]
+    hr_adjusted <- hr / reference_hr
+
+    # Create the data frame for plotting
+    plot_data <- data.frame(
+      Percentile = new_data[[percentile_var]],
+      Hazard_Ratio = hr_adjusted,
+      Variable = percentile_var
+    )
+    
+    return(plot_data)
+  } else {
+    cat("Reference value or closest value not found in new_data.\n")
+    return(NULL)
+  }
+}
+
+```
+
+
+```{r}
+# Define the variables and their reference values
+variables <- list(
+  list(var = "ADI_percentile_num", ref = 50),
+  list(var = "SVM_percentile_num", ref = 49.339293),
+  list(var = "SVI_percentile_num", ref = 49.540404),
+  list(var = "DCI_percentile_num", ref = 49.494990)
+)
+
+# Use lapply to apply the function to each variable
+plot_data_list <- lapply(variables, function(x) predict_and_plot_hr(df_cand_kipa_w_scores, x$var, x$ref))
+
+# Combine all data frames into one
+combined_plot_data <- do.call(rbind, plot_data_list)
+
+# Plot
+ggplot(combined_plot_data, aes(x = Percentile, y = Hazard_Ratio, color = Variable)) +
+  geom_line() +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "red") +  # Add a reference line at HR = 1
+  labs(title = "Hazard Ratio by Percentile for Different Variables",
+       x = "Percentile",
+       y = "Hazard Ratio of Transplant(Reference = Specified Value)") +
+  theme_minimal() +
+  scale_color_manual(values = c("ADI_percentile_num" = "red", 
+                                "SVM_percentile_num" = "purple",
+                                "SVI_percentile_num" = "blue",
+                                "DCI_percentile_num" = "green"))
+
+```
+
+```{r}
+df_cand_kipa_w_scores$SVM_percentile_num <- as.numeric(df_cand_kipa_w_scores$SVM_PERCENTILE)
+df_cand_kipa_w_scores$SVI_percentile_num <- as.numeric(df_cand_kipa_w_scores$SVI_percentile)
+df_cand_kipa_w_scores$ADI_percentile_num <- as.numeric(df_cand_kipa_w_scores$ADI_percentile)
+df_cand_kipa_w_scores$DCI_percentile_num <- as.numeric(df_cand_kipa_w_scores$dci_percentile)
+```
+
+##attempt to show confidence intervals
+```{r}
+predict_and_plot_hr_with_ci <- function(data, percentile_var, reference_value, tolerance = 1e-6) {
+  # Convert the percentile variable to numeric if it's not already
+  data[[percentile_var]] <- as.numeric(data[[percentile_var]])
+  
+  # Ensure the datadist is set up for the model
+  dd <- datadist(data)
+  options(datadist = "dd")
+  
+  # Fit the Cox model with restricted cubic splines
+  model_formula <- as.formula(paste("Surv(time, death_outcome) ~ rcs(", percentile_var, ", 4)"))
+  model <- cph(model_formula, data = data, x = TRUE, y = TRUE)
+  
+  # Generate new data for prediction
+  new_data <- data.frame(
+    ADI_percentile_num = seq(min(data$ADI_percentile_num, na.rm = TRUE),
+                             max(data$ADI_percentile_num, na.rm = TRUE),
+                             length.out = 100),
+    SVM_percentile_num = seq(min(data$SVM_percentile_num, na.rm = TRUE),
+                             max(data$SVM_percentile_num, na.rm = TRUE),
+                             length.out = 100),
+    SVI_percentile_num = seq(min(data$SVI_percentile_num, na.rm = TRUE),
+                             max(data$SVI_percentile_num, na.rm = TRUE),
+                             length.out = 100),
+    DCI_percentile_num = seq(min(data$DCI_percentile_num, na.rm = TRUE),
+                             max(data$DCI_percentile_num, na.rm = TRUE),
+                             length.out = 100)
+  )
+  
+  # Predict the linear predictor and standard errors
+  pred <- tryCatch({
+    predict(model, newdata = new_data, type = "lp", se.fit = TRUE)
+  }, error = function(e) {
+    message("Error in predict function: ", e$message)
+    NULL
+  })
+  
+  # Check the structure and class of the prediction output
+  if (!is.null(pred)) {
+    print("Structure of prediction output:")
+    str(pred)
+    print("Class of prediction output:")
+    print(class(pred))
+    
+    # Extract linear predictors and standard errors
+    if (is.list(pred) && "linear.predictors" %in% names(pred) && "se.fit" %in% names(pred)) {
+      linear_predictors <- pred$linear.predictors
+      se_fit <- pred$se.fit
+      
+      # Ensure these are numeric
+      if (is.numeric(linear_predictors) && is.numeric(se_fit)) {
+        # Predict hazard ratios and confidence intervals
+        hr <- exp(linear_predictors)
+        ci_low <- exp(linear_predictors - 1.96 * se_fit)
+        ci_high <- exp(linear_predictors + 1.96 * se_fit)
+        
+        # Find the hazard ratio at the reference value
+        closest_index <- which.min(abs(new_data[[percentile_var]] - reference_value))
+        reference_hr <- hr[closest_index]
+        
+        # Adjust hazard ratios and confidence intervals
+        hr_adjusted <- hr / reference_hr
+        ci_low_adjusted <- ci_low / reference_hr
+        ci_high_adjusted <- ci_high / reference_hr
+        
+        # Create the data frame for plotting
+        plot_data <- data.frame(
+          Percentile = new_data[[percentile_var]],
+          Hazard_Ratio = hr_adjusted,
+          CI_Low = ci_low_adjusted,
+          CI_High = ci_high_adjusted
+        )
+        
+        # Plot
+        ggplot(plot_data, aes(x = Percentile, y = Hazard_Ratio)) +
+          geom_line() +
+          geom_ribbon(aes(ymin = CI_Low, ymax = CI_High), alpha = 0.3) +  # Add confidence intervals
+          geom_hline(yintercept = 1, linetype = "dashed", color = "red") +  # Add a reference line at HR = 1
+          labs(title = paste("Hazard Ratio by", percentile_var),
+               x = percentile_var,
+               y = "Hazard Ratio of Death/Deterioration (Reference = ", reference_value, ")") +
+          theme_minimal()
+      } else {
+        stop("Prediction output components are not numeric.")
+      }
+    } else {
+      stop("Prediction output does not contain expected components.")
+    }
+  } else {
+    message("Prediction failed; no plot generated.")
+  }
+}
+
+# Example call to the function for ADI_percentile_num
+predict_and_plot_hr_with_ci(df_cand_kipa_w_scores, "ADI_percentile_num", 50, tolerance = 1e-6)
+
+```
+##attempt to put all 4 on 1 plot with hazard ratios - very weird and confusing
+```{r}
+predict_and_plot_hr_with_ci <- function(model, percentile_var, reference_value, tolerance = 1e-6) {
+  # Print the class of the model for debugging
+  print(class(model))
+  
+  # Check if model is of class 'cph'
+  if (!inherits(model, "cph")) {
+    stop("Model is not of class 'cph'")
+  }
+  
+  # Ensure new_data is a standard data frame
+  new_data <- data.frame(
+    ADI_percentile_num = seq(min(df_cand_kipa_w_scores$ADI_percentile_num, na.rm = TRUE),
+                              max(df_cand_kipa_w_scores$ADI_percentile_num, na.rm = TRUE), length.out = 100),
+    SVM_percentile_num = seq(min(df_cand_kipa_w_scores$SVM_percentile_num, na.rm = TRUE),
+                              max(df_cand_kipa_w_scores$SVM_percentile_num, na.rm = TRUE), length.out = 100),
+    SVI_percentile_num = seq(min(df_cand_kipa_w_scores$SVI_percentile_num, na.rm = TRUE),
+                              max(df_cand_kipa_w_scores$SVI_percentile_num, na.rm = TRUE), length.out = 100),
+    DCI_percentile_num = seq(min(df_cand_kipa_w_scores$DCI_percentile_num, na.rm = TRUE),
+                              max(df_cand_kipa_w_scores$DCI_percentile_num, na.rm = TRUE), length.out = 100)
+  )
+  
+  # Modify the specific percentile_var
+  new_data[[percentile_var]] <- seq(min(df_cand_kipa_w_scores[[percentile_var]], na.rm = TRUE),
+                                    max(df_cand_kipa_w_scores[[percentile_var]], na.rm = TRUE), length.out = 100)
+  
+  # Convert to plain data.frame if necessary
+  new_data <- as.data.frame(new_data)
+  
+  # Predict using the model
+  pred <- tryCatch({
+    predict(model, newdata = new_data, type = "lp", se.fit = TRUE)
+  }, error = function(e) {
+    stop("Error in predict: ", e$message)
+  })
+  
+  # Check if prediction is numeric
+  if (!is.numeric(pred$fit)) {
+    stop("Prediction output is not numeric.")
+  }
+  
+  # Extract predictions and standard errors
+  fit <- pred$fit
+  se.fit <- pred$se.fit
+  
+  # Compute hazard ratios and confidence intervals
+  hr <- exp(fit)
+  hr_lower <- exp(fit - 1.96 * se.fit)
+  hr_upper <- exp(fit + 1.96 * se.fit)
+  
+  # Compute reference hazard ratio
+  ref_data <- data.frame(setNames(list(reference_value), percentile_var))
+  ref_data <- as.data.frame(ref_data)
+  reference_hr <- exp(predict(model, newdata = ref_data, type = "lp"))
+  
+  # Adjust hazard ratios by reference value
   hr_adjusted <- hr / reference_hr
-
-  # Create the data frame for plotting
+  hr_lower_adjusted <- hr_lower / reference_hr
+  hr_upper_adjusted <- hr_upper / reference_hr
+  
+  # Create plot data
   plot_data <- data.frame(
-    Decile = new_data[[paste0(decile_col, "_num")]],
+    Percentile = new_data[[percentile_var]],
     Hazard_Ratio = hr_adjusted,
-    Variable = decile_col  # Add a column for the variable name
+    Lower_CI = hr_lower_adjusted,
+    Upper_CI = hr_upper_adjusted,
+    Variable = percentile_var
   )
   
   return(plot_data)
 }
-
-# Generate plot data for each decile
-plot_data_ADI <- generate_plot_data("ADI_decile")
-plot_data_SVM <- generate_plot_data("SVM_decile")
-plot_data_SVI <- generate_plot_data("SVI_decile")
-plot_data_DCI <- generate_plot_data("DCI_decile")
-
-# Combine all plot data into one data frame
-combined_plot_data <- bind_rows(plot_data_ADI, plot_data_SVM, plot_data_SVI, plot_data_DCI)
-
-# Plot all lines on the same graph with x-axis intervals of 1
-ggplot(combined_plot_data, aes(x = Decile, y = Hazard_Ratio, color = Variable)) +
-  geom_line() +
-  geom_hline(yintercept = 1, linetype = "dashed", color = "red") +  # Add a reference line at HR = 1
-  scale_x_continuous(breaks = seq(min(combined_plot_data$Decile, na.rm = TRUE),
-                                  max(combined_plot_data$Decile, na.rm = TRUE),
-                                  by = 1)) +  # Set x-axis breaks to intervals of 1
-  labs(title = "Hazard Ratio by Decile for Various Metrics",
-       x = "Decile Number",
-       y = "Hazard Ratio of Death/Deterioration(Reference = 5)",
-       color = "Variable") +
-  theme_minimal()
-
 ```
+
 ```{r}
-# Convert decile columns to numeric
-df_cand_kipa_w_scores$ADI_decile_num <- as.numeric(df_cand_kipa_w_scores$ADI_decile)
-df_cand_kipa_w_scores$SVM_decile_num <- as.numeric(df_cand_kipa_w_scores$SVM_decile)
-df_cand_kipa_w_scores$SVI_decile_num <- as.numeric(df_cand_kipa_w_scores$SVI_decile)
-df_cand_kipa_w_scores$DCI_decile_num <- as.numeric(df_cand_kipa_w_scores$DCI_decile)
+predict_and_plot_hr_with_ci <- function(model, percentile_var, ref_value, tolerance = 1e-6) {
+  # Ensure that the model is of class 'cph'
+  if (!inherits(model, "cph")) stop("Model is not of class 'cph'")
+  
+  # Clean the data to avoid issues with non-finite values
+  clean_data <- df_cand_kipa_w_scores[!is.na(df_cand_kipa_w_scores[[percentile_var]]) &
+                                       !is.infinite(df_cand_kipa_w_scores[[percentile_var]]), ]
+  
+  # Ensure percentiles have finite values
+  min_value <- min(clean_data[[percentile_var]], na.rm = TRUE)
+  max_value <- max(clean_data[[percentile_var]], na.rm = TRUE)
+  
+  # Handle the case where min or max is not finite
+  if (!is.finite(min_value) || !is.finite(max_value)) {
+    stop("Non-finite minimum or maximum value found in the percentile variable.")
+  }
+  
+  # Create a sequence of percentiles
+  percentiles <- seq(min_value, max_value, length.out = 100)
+  
+  # Create a new data frame with the correct column names
+  new_data <- data.frame(matrix(ncol = length(c("ADI_percentile_num", 
+                                                 "SVM_percentile_num", 
+                                                 "SVI_percentile_num", 
+                                                 "DCI_percentile_num")), 
+                                 nrow = length(percentiles)))
+  colnames(new_data) <- c("ADI_percentile_num", "SVM_percentile_num", 
+                           "SVI_percentile_num", "DCI_percentile_num")
+  
+  # Fill the new_data with the percentiles and reference values
+  new_data[[percentile_var]] <- percentiles
+  for (var in colnames(new_data)) {
+    if (var != percentile_var) {
+      new_data[[var]] <- ref_value
+    }
+  }
+  
+  # Use tryCatch to handle errors in the predict function
+  tryCatch({
+    pred <- predict(model, newdata = new_data, type = "lp", se.fit = TRUE)
+    
+    # Extract linear predictors and standard errors
+    linear_predictors <- pred$linear.predictors
+    se_fit <- pred$se.fit
+    
+    # Calculate hazard ratios and confidence intervals
+    hazard_ratios <- exp(linear_predictors)
+    ci_lower <- exp(linear_predictors - 1.96 * se_fit)
+    ci_upper <- exp(linear_predictors + 1.96 * se_fit)
+    
+    # Prepare the data for plotting
+    plot_data <- data.frame(
+      Percentile = percentiles,
+      Hazard_Ratio = hazard_ratios,
+      Lower_CI = ci_lower,
+      Upper_CI = ci_upper,
+      Variable = percentile_var
+    )
+    
+    return(plot_data)
+  }, error = function(e) {
+    stop("Error in predict: ", e$message)
+  })
+}
+# Fit the model
+library(rms)
+model <- cph(Surv(time, death_outcome) ~ ADI_percentile_num + SVM_percentile_num + SVI_percentile_num + DCI_percentile_num, data = df_cand_kipa_w_scores)
+
+# Define the variables and their reference values
+variables <- list(
+  list(var = "ADI_percentile_num", ref = 50),
+  list(var = "SVM_percentile_num", ref = 49.339293),
+  list(var = "SVI_percentile_num", ref = 49.538939),
+  list(var = "DCI_percentile_num", ref = 49.494990)
+)
+
+# Use lapply to apply the function to each variable
+plot_data_list <- lapply(variables, function(x) predict_and_plot_hr_with_ci(model, x$var, x$ref))
+
+# Combine all data frames into one
+combined_plot_data <- do.call(rbind, plot_data_list)
+
+# Plot
+ggplot(combined_plot_data, aes(x = Percentile, y = Hazard_Ratio, color = Variable)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = Lower_CI, ymax = Upper_CI), alpha = 0.2) +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "red") +
+  labs(title = "Hazard Ratio by Percentile for Different Variables",
+       x = "Percentile",
+       y = "Hazard Ratio of Death/Deterioration (Reference = Specified Value)") +
+  theme_minimal() +
+  scale_color_manual(values = c("ADI_percentile_num" = "blue", 
+                                "SVM_percentile_num" = "green",
+                                "SVI_percentile_num" = "purple",
+                                "DCI_percentile_num" = "orange"))
+
 ```
+
+
+
 
 ```{r}
 # Define the formula for the model
@@ -582,7 +1099,7 @@ test_model <- cph(test_formula, data = df_cand_kipa_w_scores, x = TRUE, y = TRUE
 summary(test_model)
 
 ```
-##all 4 indices - death/deterioration - with confidence intervals
+##all 4 indices - death/deterioration by decile - with confidence intervals
 ```{r}
 # Load necessary libraries
 library(rms)
@@ -679,7 +1196,7 @@ ggplot(combined_plot_data, aes(x = Decile, y = Hazard_Ratio, color = Variable)) 
   theme_minimal()
 
 ```
-##all 4 - transplant - with confidence intervals
+##all 4 - transplant by decile - with confidence intervals
 ```{r}
 # Load necessary libraries
 library(rms)
@@ -779,4 +1296,198 @@ ggplot(combined_plot_data, aes(x = Decile, y = Hazard_Ratio, color = Variable)) 
 
 ```{r}
 rm(dd, model, new_data, plot_data, plot_data_ADI, plot_data_SVM, plot_data_SVI, plot_data_DCI, ADI_seq, DCI_seq, hr, lp, SVI_seq, SVM_seq, xlim_range, ylim_range)
+```
+##from Alex's code - transplant
+```{r}
+library(pROC)
+
+SVM_model_transplant <- coxph(Surv(survival_time,transplant_outcome) ~ rcs(SVM_PERCENTILE), data = df_cand_kipa_w_scores)
+SVI_model_transplant <- coxph(Surv(survival_time,transplant_outcome) ~ rcs(SVI_percentile) , data = df_cand_kipa_w_scores)
+ADI_model_transplant <- coxph(Surv(survival_time,transplant_outcome) ~ rcs(ADI_percentile), data = df_cand_kipa_w_scores)
+DCI_model_transplant <- coxph(Surv(survival_time,transplant_outcome) ~ rcs(dci_percentile), data = df_cand_kipa_w_scores)
+
+zci <- function(fit, p=.95) {
+ilogist <- function(p) log(p/(1-p)) # inverse logistic
+logistic <- function(x) exp(x)/(1 + exp(x))
+temp <- concordance(fit, influence =1)
+cminus <- temp$concordance - temp$dfbeta # values of concordance, without i
+newd <- ilogist(temp$concordance) - ilogist(cminus) # dfbeta on new scale
+new.sd <- sqrt(sum(newd^2))
+z <- qnorm((1-p)/2)
+new.ci <- logistic(ilogist(temp$concordance) + c(z, -z)* new.sd)
+rbind( new= new.ci)
+}
+
+concordance(SVM_model_transplant)
+zci(SVM_model_transplant)
+auc <- auc(df_cand_kipa_w_scores$transplant_outcome ~ 
+                  predict(SVM_model_transplant, newdata = df_cand_kipa_w_scores, type = 'risk', direction = '<'))
+auc
+ci(auc)
+
+concordance(SVI_model_transplant)
+zci(SVI_model_transplant)
+auc <- auc(df_cand_kipa_w_scores$transplant_outcome ~ 
+                  predict(SVI_model_transplant, newdata = df_cand_kipa_w_scores, type = 'risk', direction = '<'))
+auc
+ci(auc)
+
+concordance(ADI_model_transplant)
+zci(ADI_model_transplant)
+auc <- auc(df_cand_kipa_w_scores$transplant_outcome ~ 
+                  predict(ADI_model_transplant, newdata = df_cand_kipa_w_scores, type = 'risk', direction = '<'))
+auc
+ci(auc)
+
+concordance(DCI_model_transplant)
+zci(DCI_model_transplant)
+auc <- auc(df_cand_kipa_w_scores$transplant_outcome ~ 
+                  predict(DCI_model_transplant, newdata = df_cand_kipa_w_scores, type = 'risk', direction = '<'))
+auc
+ci(auc)
+```
+
+```{r}
+avg_patient <- tibble(
+  SVM_PERCENTILE = rep(seq(0,100),2))
+avg_patient1 <- tibble(
+  SVI_percentile = rep(seq(0,100),2))
+avg_patient2 <- tibble(
+  ADI_percentile = rep(seq(0,100),2))
+avg_patient3 <- tibble(
+  dci_percentile = rep(seq(0,100),2))
+
+
+hazard_transplant_SVM <- predict(SVM_model_transplant, newdata = avg_patient)
+hazard_transplant_SVI <- predict(SVI_model_transplant, newdata = avg_patient1)
+hazard_transplant_ADI <- predict(ADI_model_transplant, newdata = avg_patient2)
+hazard_transplant_DCI <- predict(DCI_model_transplant, newdata = avg_patient3)
+
+
+change_basecase_to_first_percentile <- function(hazard_list){
+  log_haz_1st_SVM <- hazard_list[[50]]
+
+hazard_list<- hazard_list - log_haz_1st_SVM
+
+exp(hazard_list)
+  
+}
+hazard_transplant_SVM <- change_basecase_to_first_percentile(hazard_transplant_SVM)
+hazard_transplant_SVI <- change_basecase_to_first_percentile(hazard_transplant_SVI)
+hazard_transplant_ADI <- change_basecase_to_first_percentile(hazard_transplant_ADI)
+hazard_transplant_DCI <- change_basecase_to_first_percentile(hazard_transplant_DCI)
+
+spline_transplant <- avg_patient |> 
+  cbind(hazard_transplant_SVM,
+        hazard_transplant_SVI,
+        hazard_transplant_ADI, 
+        hazard_transplant_DCI) |> 
+  ggplot()+
+  geom_smooth(aes(x=SVM_PERCENTILE, y = hazard_transplant_SVM, color = "SVM"), data = avg_patient) +
+    geom_smooth(aes(x=SVI_percentile, y = hazard_transplant_SVI, color = "SVI"), data = avg_patient1)+
+    geom_smooth(aes(x=ADI_percentile, y = hazard_transplant_ADI, color = "ADI"), data = avg_patient2)+
+    geom_smooth(aes(x=dci_percentile, y = hazard_transplant_DCI, color = "DCI"), data = avg_patient3)+
+  xlab("Place-Based Disadvantage Index Percentile")+
+  ylab("Cause Specific Hazard Ratio of Transplant")+
+  theme(legend.title = element_blank(),
+        legend.position = "bottom")
+
+spline_transplant
+```
+##from Alex's code - death/deterioration
+```{r}
+library("pROC")
+
+SVM_model_death <- coxph(Surv(survival_time,death_outcome) ~ rcs(SVM_PERCENTILE), data = df_cand_kipa_w_scores)
+SVI_model_death <- coxph(Surv(survival_time,death_outcome) ~ rcs(SVI_percentile) , data = df_cand_kipa_w_scores)
+ADI_model_death <- coxph(Surv(survival_time,death_outcome) ~ rcs(ADI_percentile), data = df_cand_kipa_w_scores)
+DCI_model_death <- coxph(Surv(survival_time,death_outcome) ~ rcs(dci_percentile), data = df_cand_kipa_w_scores)
+
+zci <- function(fit, p=.95) {
+ilogist <- function(p) log(p/(1-p)) # inverse logistic
+logistic <- function(x) exp(x)/(1 + exp(x))
+temp <- concordance(fit, influence =1)
+cminus <- temp$concordance - temp$dfbeta # values of concordance, without i
+newd <- ilogist(temp$concordance) - ilogist(cminus) # dfbeta on new scale
+new.sd <- sqrt(sum(newd^2))
+z <- qnorm((1-p)/2)
+new.ci <- logistic(ilogist(temp$concordance) + c(z, -z)* new.sd)
+rbind( new= new.ci)
+}
+
+concordance(SVM_model_death)
+zci(SVM_model_death)
+auc <- auc(df_cand_kipa_w_scores$death_outcome ~ 
+                  predict(SVM_model_death, newdata = df_cand_kipa_w_scores, type = 'risk', direction = '<'))
+auc
+ci(auc)
+
+concordance(SVI_model_death)
+zci(SVI_model_death)
+auc <- auc(df_cand_kipa_w_scores$death_outcome ~ 
+                  predict(SVI_model_death, newdata = df_cand_kipa_w_scores, type = 'risk', direction = '<'))
+auc
+ci(auc)
+
+concordance(ADI_model_death)
+zci(ADI_model_death)
+auc <- auc(df_cand_kipa_w_scores$death_outcome ~ 
+                  predict(ADI_model_death, newdata = df_cand_kipa_w_scores, type = 'risk', direction = '<'))
+auc
+ci(auc)
+
+concordance(DCI_model_death)
+zci(DCI_model_death)
+auc <- auc(df_cand_kipa_w_scores$death_outcome ~ 
+                  predict(DCI_model_death, newdata = df_cand_kipa_w_scores, type = 'risk', direction = '<'))
+auc
+ci(auc)
+```
+
+```{r}
+avg_patient <- tibble(
+  SVM_PERCENTILE = rep(seq(0,100),2))
+avg_patient1 <- tibble(
+  SVI_percentile = rep(seq(0,100),2))
+avg_patient2 <- tibble(
+  ADI_percentile = rep(seq(0,100),2))
+avg_patient3 <- tibble(
+  dci_percentile = rep(seq(0,100),2))
+
+
+hazard_death_SVM <- predict(SVM_model_death, newdata = avg_patient)
+hazard_death_SVI <- predict(SVI_model_death, newdata = avg_patient1)
+hazard_death_ADI <- predict(ADI_model_death, newdata = avg_patient2)
+hazard_death_DCI <- predict(DCI_model_death, newdata = avg_patient3)
+
+
+change_basecase_to_first_percentile <- function(hazard_list){
+  log_haz_1st_SVM <- hazard_list[[50]]
+
+hazard_list<- hazard_list - log_haz_1st_SVM
+
+exp(hazard_list)
+  
+}
+hazard_death_SVM <- change_basecase_to_first_percentile(hazard_death_SVM)
+hazard_death_SVI <- change_basecase_to_first_percentile(hazard_death_SVI)
+hazard_death_ADI <- change_basecase_to_first_percentile(hazard_death_ADI)
+hazard_death_DCI <- change_basecase_to_first_percentile(hazard_death_DCI)
+
+spline_transplant <- avg_patient |> 
+  cbind(hazard_death_SVM,
+        hazard_death_SVI,
+        hazard_death_ADI, 
+        hazard_death_DCI) |> 
+  ggplot()+
+  geom_smooth(aes(x=SVM_PERCENTILE, y = hazard_death_SVM, color = "SVM"), data = avg_patient) +
+    geom_smooth(aes(x=SVI_percentile, y = hazard_death_SVI, color = "SVI"), data = avg_patient1)+
+    geom_smooth(aes(x=ADI_percentile, y = hazard_death_ADI, color = "ADI"), data = avg_patient2)+
+    geom_smooth(aes(x=dci_percentile, y = hazard_death_DCI, color = "DCI"), data = avg_patient3)+
+  xlab("Place-Based Disadvantage Index Percentile")+
+  ylab("Cause Specific Hazard Ratio of Death/Deterioration")+
+  theme(legend.title = element_blank(),
+        legend.position = "bottom")
+
+spline_transplant
 ```
