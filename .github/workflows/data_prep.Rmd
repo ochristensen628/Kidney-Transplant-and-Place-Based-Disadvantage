@@ -692,6 +692,22 @@ df_intervals <- df_intervals %>%
 ## Extra line to remove missings
 df_intervals$percentile_epts[is.na(df_intervals$raw_epts)] <- NA
 ```
+```{r eval=FALSE, include=FALSE}
+library(dplyr)
+
+df_cand_kipa <- df_cand_kipa %>%
+  filter(
+    is.na(CAN_LISTING_DT) | 
+    is.na(CAN_DEATH_DT) | 
+    is.na(PERS_SSA_DEATH_DT) | 
+    is.na(PERS_OPTN_DEATH_DT) | 
+    !(CAN_LISTING_DT == CAN_DEATH_DT | 
+      CAN_LISTING_DT == PERS_SSA_DEATH_DT | 
+      CAN_LISTING_DT == PERS_OPTN_DEATH_DT)
+  )
+```
+
+
 
 ##ADI
 
@@ -841,7 +857,41 @@ df_cand_kipa %>% select(PX_ID, preemp, CAN_LISTING_DT, CAN_TIEBREAKER_DT, CAN_DI
 ##still don't know why there were negatives in original data frames, but our cohort has all positive PX_IDs. should end up with all positives after this left join
 df_cand_kipa_w_scores <- left_join(df_cand_kipa, select(cand_zip, SVM_SCORE, SVM_PERCENTILE, PX_ID, SVI_percentile, ADI_percentile, dci_percentile),
                               by = c("PX_ID" = "PX_ID"))
+```
 
+```{r}
+df_cand_kipa_w_scores
+
+df_cand_kipa_w_scores <- df_cand_kipa_w_scores %>%
+  filter(
+    is.na(CAN_LISTING_DT) | 
+    is.na(CAN_DEATH_DT) | 
+    !(CAN_LISTING_DT == CAN_DEATH_DT)
+  )
+
+df_cand_kipa_w_scores <- df_cand_kipa_w_scores %>%
+  filter(
+    is.na(CAN_LISTING_DT) | 
+    is.na(PERS_SSA_DEATH_DT) | 
+    !(CAN_LISTING_DT == PERS_SSA_DEATH_DT)
+  )
+
+df_cand_kipa_w_scores <- df_cand_kipa_w_scores %>%
+  filter(
+    is.na(CAN_LISTING_DT) | 
+    is.na(PERS_OPTN_DEATH_DT) | 
+    !(CAN_LISTING_DT == PERS_OPTN_DEATH_DT)
+  )
+
+```
+
+
+```{r}
+df_cand_kipa_w_scores %>% filter(CAN_LISTING_DT == CAN_DEATH_DT)
+```
+
+
+```{r}
 df_cand_kipa_w_scores <- df_cand_kipa_w_scores %>%
   mutate(SVM_PERCENTILE = as.numeric(as.character(SVM_PERCENTILE)),
          SVI_percentile = as.numeric(as.character(SVI_percentile)),
@@ -935,10 +985,12 @@ table(df_cand_kipa_w_scores$status)
 ```{r}
 df_cand_kipa_w_scores <- df_cand_kipa_w_scores %>%
   mutate(transplant_outcome = case_when(
+    survival_time == 1826 ~ 0,
     status == "censor" ~ 0,
     status == "transplant" ~ 1,
     .default = 0),
     death_outcome = case_when(
+      survival_time == 1826 ~ 0,
       status == "censor" ~ 0,
       status == "death/deteriorate" ~ 1,
       .default = 0
@@ -997,6 +1049,7 @@ grViz(dot_code)
 
 ```
 
+
 ```{r}
 table(df_cand_kipa_w_scores$status)
 ```
@@ -1025,7 +1078,6 @@ summary_table <- custom_summary_function(df_cand_kipa_w_scores)
 # Print the summary table
 print(summary_table)
 ```
-
 ```{r}
 library(gtsummary)
 library(dplyr)
@@ -1057,7 +1109,6 @@ summary_table <- df_cand_kipa_w_scores_clean %>%
 print(summary_table)
 
 ```
-
 ```{r}
 # Filter out candidates with no label in CAN_RACE_SRTR
 df_cand_kipa_w_scores %>%
@@ -1105,5 +1156,23 @@ ggsave("plot_distribution_by_outcome.png", plot = plot, width = 10, height = 6, 
 
 ```
 
+```{r}
+df_cand_kipa_w_scores %>% filter(survival_time == 1826)
+```
+
+```{r}
+df_cand_kipa_w_scores %>% filter(CAN_LISTING_DT == CAN_DEATH_DT)
+```
+
+```{r}
+df_cand_kipa_w_scores %>% filter(survival_time == 0) %>% select(PX_ID, CAN_LISTING_DT, REC_TX_DT, CAN_DEATH_DT, PERS_SSA_DEATH_DT, PERS_OPTN_DEATH_DT, transplant_time, transplant_outcome, death_time, death_outcome, removal_time, removal_date, last_active_date, last_inactive_date, survival_time)
+```
+```{r}
+df_cand_kipa_w_scores <- df_cand_kipa_w_scores %>% filter(!(survival_time == 0))
+```
+
+```{r}
+df_cand_kipa_w_scores %>% filter(survival_time == 0) %>% select(PX_ID, CAN_LISTING_DT, REC_TX_DT, CAN_DEATH_DT, PERS_SSA_DEATH_DT, PERS_OPTN_DEATH_DT, transplant_time, transplant_outcome, death_time, death_outcome, removal_time, removal_date, last_active_date, last_inactive_date, survival_time)
+```
 
 
