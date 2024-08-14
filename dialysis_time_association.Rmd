@@ -1,0 +1,637 @@
+---
+title: "dialysis_time_association"
+author: "Edgar Aguila"
+output: html_notebook
+---
+
+# Load in Libraries
+```{r}
+library(ggplot2)
+library(tidyverse)
+library(lubridate)
+library(haven)
+library(dplyr)
+```
+
+# Set reference levels to 5th decile
+```{r}
+study_cohort_df$SVM_decile <- relevel(study_cohort_df$SVM_decile, ref = "5")
+study_cohort_df$SVI_decile <- relevel(study_cohort_df$SVI_decile, ref = "5")
+study_cohort_df$ADI_decile <- relevel(study_cohort_df$ADI_decile, ref = "5")
+study_cohort_df$DCI_decile <- relevel(study_cohort_df$DCI_decile, ref = "5")
+```
+
+## Linear Model w/ Dialysis Time
+```{r}
+# Create models
+## SVM
+svm_lm <- lm(dialysis_time_at_list ~ SVM_decile, data = study_cohort_df)
+
+## SVI
+svi_lm <- lm(dialysis_time_at_list ~ SVI_decile, data = study_cohort_df)
+
+## ADI
+adi_lm <- lm(dialysis_time_at_list ~ ADI_decile, data = study_cohort_df)
+
+## DCI
+dci_lm <- lm(dialysis_time_at_list ~ DCI_decile, data = study_cohort_df)
+
+# View all regressions
+svm_lm
+svi_lm
+adi_lm
+dci_lm
+```
+
+# Linear Model Graph
+```{r}
+# Create new data frame
+decile <- c(1:4, 6:10)
+
+lm_df <- data.frame(decile = decile) # Convert to data frame
+lm_df # view
+
+# Create Coefficient columns
+lm_df <- lm_df %>%
+  mutate(
+    coefficient_svm = coef(svm_lm)[-1], # SVM
+    coefficient_svi = coef(svi_lm)[-1], # SVI
+    coefficient_adi = coef(adi_lm)[-1], # ADI
+    coefficient_dci = coef(dci_lm)[-1] # DCI
+  )
+lm_df # view
+
+# Insert baseline row
+lm_df <- lm_df %>%
+  rbind(data.frame(decile = 5, coefficient_svm = 0, coefficient_svi = 0, coefficient_adi = 0, coefficient_dci = 0))
+
+lm_df <- lm_df[order(lm_df$decile), ] # Put decile column in order
+lm_df # view
+
+# Create Graph
+lm_df_visual <- ggplot(lm_df, aes(x = decile)) + # Set base
+  geom_line(aes(y = coefficient_svm, color = "SVM")) + # SVM
+  geom_line(aes(y = coefficient_svi, color = "SVI")) + # SVI
+  geom_line(aes(y = coefficient_adi, color = "ADI")) + # ADI
+  geom_line(aes(y = coefficient_dci, color = "DCI")) + # DCI
+  theme_classic() + # Set theme (preference)
+  geom_hline(yintercept = 0, color = "black") + # Set x-axis to y = 0
+  labs(title = "Linear Model Coefficients of Dialysis by Decile", # Set title
+       subtitle = "Data from SRTR 2024", # Set subtitle
+       x = "Composite Score Decile", # Set x-axis label
+       y = "Correlation Coefficient") + # Set y-axis label
+  theme(axis.line.x = element_blank(), # Remove original x-axis line
+        axis.ticks.x = element_blank(), # Remove original x-axis ticks
+        axis.text.x = element_text(vjust = 52)) + # Raise x-axis labels to match new x-axis line at y = 0 (looks bad here but good on PDF)
+  geom_segment(aes(x = decile, # Add new tick indicators
+                   xend = decile, 
+                   y = 0.02, 
+                   yend = -0.02), 
+               color = "black") + 
+  scale_x_continuous(breaks = 1:10, # Create new tick breaks in new x-axis line at y = 0
+                     labels = 1:10)
+lm_df_visual # view
+
+# Save to PDF
+ggsave("/Users/edgaraguila/Desktop/School/Research Projects/UChicago Research/Data/dialysis_time_association Graphs/Linear Model Graph.pdf", plot = lm_df_visual, height = 4, units = "in")
+```
+
+# Log transformation of linear models
+```{r}
+# Log Transformation
+study_cohort_df <- study_cohort_df %>%
+  mutate(log_dialysis = case_when(
+    dialysis_time_at_list > 0 ~ log(dialysis_time_at_list), # greater than zero, keep
+    dialysis_time_at_list < 0 ~ log(dialysis_time_at_list), # less than zero, keep
+    dialysis_time_at_list == 0 ~ log(1) # equal to zero, set log(1) so log value is 0
+  ))
+study_cohort_df
+
+## Create Log Models
+## SVM
+svm_lm_log <- lm(log_dialysis ~ SVM_decile, data = study_cohort_df)
+
+## SVI
+svi_lm_log <- lm(log_dialysis ~ SVI_decile, data = study_cohort_df)
+
+## ADI
+adi_lm_log <- lm(log_dialysis ~ ADI_decile, data = study_cohort_df)
+
+## DCI
+dci_lm_log <- lm(log_dialysis ~ DCI_decile, data = study_cohort_df)
+
+# View all regressions
+svm_lm_log
+svi_lm_log
+adi_lm_log
+dci_lm_log
+```
+
+# Log(Linear Model) Graph
+```{r}
+# Create new data frame
+decile <- c(1:4, 6:10)
+
+lm_log_df <- data.frame(decile = decile) # Convert to data frame
+lm_log_df # view
+
+# Create Coefficient columns
+lm_log_df <- lm_log_df %>%
+  mutate(
+    coefficient_svm = coef(svm_lm_log)[-1], # SVM
+    coefficient_svi = coef(svi_lm_log)[-1], # SVI
+    coefficient_adi = coef(adi_lm_log)[-1], # ADI
+    coefficient_dci = coef(dci_lm_log)[-1] # DCI
+  )
+lm_log_df # view
+
+# Insert baseline row
+lm_log_df <- lm_log_df %>%
+  rbind(data.frame(decile = 5, coefficient_svm = 0, coefficient_svi = 0, coefficient_adi = 0, coefficient_dci = 0))
+
+lm_log_df <- lm_log_df[order(lm_log_df$decile), ] # Put decile column in order
+lm_log_df # view
+
+# Create Graph
+lm_log_df_visual <- ggplot(lm_log_df, aes(x = decile)) + # Set base
+  geom_line(aes(y = coefficient_svm, color = "SVM")) + # SVM
+  geom_line(aes(y = coefficient_svi, color = "SVI")) + # SVI
+  geom_line(aes(y = coefficient_adi, color = "ADI")) + # ADI
+  geom_line(aes(y = coefficient_dci, color = "DCI")) + # DCI
+  theme_classic() + # Set theme (preference)
+  geom_hline(yintercept = 0, color = "black") + # Set x-axis to y = 0
+  labs(title = "Linear Model Coefficients of Log of Dialysis by Decile", # Set title
+       subtitle = "Data from SRTR 2024", # Set subtitle
+       x = "Composite Score Decile", # Set x-axis label
+       y = "Correlation Coefficient Log of Dialysis") + # Set y-axis label
+  theme(axis.line.x = element_blank(), # Remove original x-axis line
+        axis.ticks.x = element_blank(), # Remove original x-axis ticks
+        axis.text.x = element_text(vjust = 51)) + # Raise x-axis labels to match new x-axis line at y = 0
+  geom_segment(aes(x = decile, # Add new tick indicators
+                   xend = decile, 
+                   y = 0.0075, 
+                   yend = -0.0075), 
+               color = "black") + 
+  scale_x_continuous(breaks = 1:10, # Create new tick breaks in new x-axis line at y = 0
+                     labels = 1:10)
+lm_log_df_visual # view
+
+# Save to PDF
+ggsave("/Users/edgaraguila/Desktop/School/Research Projects/UChicago Research/Data/dialysis_time_association Graphs/Log of Linear Model Graph.pdf", plot = lm_log_df_visual, height = 4, units = "in")
+```
+
+# Preemptive Listing v. Decile (Logistic Regression)
+```{r}
+# Create models
+## SVM
+svm_glm <- glm(preemptive_listing ~ SVM_decile, data = study_cohort_df, family = "binomial")
+
+## SVI
+svi_glm <- glm(preemptive_listing ~ SVI_decile, data = study_cohort_df, family = "binomial")
+
+## ADI
+adi_glm <- glm(preemptive_listing ~ ADI_decile, data = study_cohort_df, family = "binomial")
+
+## DCI
+dci_glm <- glm(preemptive_listing ~ DCI_decile, data = study_cohort_df, family = "binomial")
+
+# View all logistic regressions
+svm_glm
+svi_glm
+adi_glm
+dci_glm
+```
+
+# Logistic Regression Graph
+```{r}
+# Create new data frame
+decile <- c(1:4, 6:10)
+
+lr_df <- data.frame(decile = decile) # Convert to data frame
+lr_df # view
+
+# Create Coefficient columns
+lr_df <- lr_df %>%
+  mutate(
+    SVM = coef(svm_glm)[-1], # SVM
+    SVI = coef(svi_glm)[-1], # SVI
+    ADI = coef(adi_glm)[-1], # ADI
+    DCI = coef(dci_glm)[-1] # DCI
+  )
+lr_df # view
+
+# Insert baseline row
+lr_df <- lr_df %>%
+  rbind(data.frame(decile = 5, SVM = 0, SVI = 0, ADI = 0, DCI = 0))
+
+lr_df <- lr_df[order(lr_df$decile), ] # Put decile column in order
+lr_df # view
+
+# Create Graph
+lr_df_visual <- ggplot(lr_df, aes(x = decile)) + # Set base
+  geom_line(aes(y = SVM, color = "SVM")) + # SVM
+  geom_line(aes(y = SVI, color = "SVI")) + # SVI
+  geom_line(aes(y = ADI, color = "ADI")) + # ADI
+  geom_line(aes(y = DCI, color = "DCI")) + # DCI
+  theme_classic() + # Set theme (preference)
+  geom_hline(yintercept = 0, color = "black") + # Set x-axis to y = 0
+  labs(title = "Logistic Regression Coefficients of Preemptive Listing by Decile", # Set title
+       subtitle = "Data from SRTR 2024", # Set subtitle
+       x = "Decile", # Set x-axis label
+       y = "Correlation Coefficient of Preemptive Listing") + # Set y-axis label
+  theme(axis.line.x = element_blank(), # Remove original x-axis line
+        axis.ticks.x = element_blank(), # Remove original x-axis ticks
+        axis.text.x = element_text(vjust = 58)) + # Raise x-axis labels to match new x-axis line at y = 0
+  geom_segment(aes(x = decile, # Add new tick indicators
+                   xend = decile, 
+                   y = 0.02, 
+                   yend = -0.02), 
+               color = "black") + 
+  scale_x_continuous(breaks = 1:10, # Create new tick breaks in new x-axis line at y = 0
+                     labels = 1:10)
+lr_df_visual # view
+
+# Save to PDF
+ggsave("/Users/edgaraguila/Desktop/School/Research Projects/UChicago Research/Data/dialysis_time_association Graphs/Logistic Regression of Preemptive Listing Graph.pdf", plot = lr_df_visual, height = 4, units = "in")
+```
+
+# Relevel factors to 1 (ask molly about this, there has to be an easier way)
+```{r}
+study_cohort_df$SVM_decile <- relevel(study_cohort_df$SVM_decile, ref = "4")
+study_cohort_df$SVM_decile <- relevel(study_cohort_df$SVM_decile, ref = "3")
+study_cohort_df$SVM_decile <- relevel(study_cohort_df$SVM_decile, ref = "2")
+study_cohort_df$SVM_decile <- relevel(study_cohort_df$SVM_decile, ref = "1")
+
+study_cohort_df$SVI_decile <- relevel(study_cohort_df$SVI_decile, ref = "4")
+study_cohort_df$SVI_decile <- relevel(study_cohort_df$SVI_decile, ref = "3")
+study_cohort_df$SVI_decile <- relevel(study_cohort_df$SVI_decile, ref = "2")
+study_cohort_df$SVI_decile <- relevel(study_cohort_df$SVI_decile, ref = "1")
+
+study_cohort_df$ADI_decile <- relevel(study_cohort_df$ADI_decile, ref = "4")
+study_cohort_df$ADI_decile <- relevel(study_cohort_df$ADI_decile, ref = "3")
+study_cohort_df$ADI_decile <- relevel(study_cohort_df$ADI_decile, ref = "2")
+study_cohort_df$ADI_decile <- relevel(study_cohort_df$ADI_decile, ref = "1")
+
+study_cohort_df$DCI_decile <- relevel(study_cohort_df$DCI_decile, ref = "4")
+study_cohort_df$DCI_decile <- relevel(study_cohort_df$DCI_decile, ref = "3")
+study_cohort_df$DCI_decile <- relevel(study_cohort_df$DCI_decile, ref = "2")
+study_cohort_df$DCI_decile <- relevel(study_cohort_df$DCI_decile, ref = "1")
+```
+
+# Median Dialysis TIme v. Decile Graph
+```{r}
+# Median Dialysis Time v. Decile (visual)
+# SVM
+svm_dialysis <- study_cohort_df %>% # Create data frame for SVM Decile v. Dialysis Time
+  group_by(SVM_decile) %>% # Group by decile
+  summarize(median_dialysis_svm = median(dialysis_time_at_list, na.rm = T)) # Calculate median
+svm_dialysis
+
+# SVI
+svi_dialysis <- study_cohort_df %>% # Create data frame for SVI Decile v. Dialysis Time
+  group_by(SVI_decile) %>% # Group by decile
+  summarize(median_dialysis_svi = median(dialysis_time_at_list, na.rm = T)) # Calculate median
+svi_dialysis
+
+# ADI
+adi_dialysis <- study_cohort_df %>% # Create data frame for ADI Decile v. Dialysis Time
+  group_by(ADI_decile) %>% # Group by decile
+  summarize(median_dialysis_adi = median(dialysis_time_at_list, na.rm = T)) # Calculate median
+adi_dialysis
+
+# DCI
+dci_dialysis <- study_cohort_df %>% # Create data frame for DCI Decile v. Dialysis Time
+  group_by(DCI_decile) %>% # Group by decile
+  summarize(median_dialysis_dci = median(dialysis_time_at_list, na.rm = T)) # Calculate median
+dci_dialysis
+
+# Let's create a scatter plot of mean days vs composite score decile, we first need to join the data
+dialysis_v_decile <- bind_cols(svm_dialysis, svi_dialysis, adi_dialysis, dci_dialysis) %>% # Combine all data
+  mutate(decile = SVM_decile) %>% # Change one decile column to "decile"
+  select(-SVM_decile, -SVI_decile, -ADI_decile, -DCI_decile) # Remove other decile columns
+dialysis_v_decile
+
+dialysis_v_decile$decile <- as.numeric(dialysis_v_decile$decile) # Set decile to numeric
+
+# Visualize graph
+dialysis_v_decile_viz <- dialysis_v_decile %>% # Use this data frame
+  ggplot(aes(x = decile)) + # Set x-axis
+  geom_line(aes(y = median_dialysis_svm, color = "SVM")) + # Set each y-axis to an SDoH Index 
+  geom_line(aes(y = median_dialysis_svi, color = "SVI")) + 
+  geom_line(aes(y = median_dialysis_adi, color = "ADI")) + 
+  geom_line(aes(y = median_dialysis_dci, color = "DCI")) + 
+  labs(title = "Median Dialysis Time at Listing by Decile", # Set title
+       subtitle = "Data from SRTR 2024", # Set subtitle
+       x = "Composite Score Decile", # set x-axis title
+       y = "Median Dialysis Time (Year)") + # set y-axis title
+  guides(color = guide_legend(title = "Composite Score")) + # set legend title
+  theme_classic() + # Set theme to classic (preference)
+  scale_x_continuous(limits = c(1, 10), breaks = seq(1, 10, by = 1)) # Set 1 through 10 ticks on x-axis
+dialysis_v_decile_viz
+
+# Save to PDF
+ggsave("/Users/edgaraguila/Desktop/School/Research Projects/UChicago Research/Data/dialysis_time_association Graphs/Median Dialysis Time v. Decile.pdf", plot = dialysis_v_decile_viz, height = 4, units = "in")
+```
+
+# % Preemptive Listing v. Decile Graph
+```{r}
+# Create data frame
+## SVM
+svm_preemp <- study_cohort_df %>%
+  group_by(SVM_decile, preemptive_listing) %>% # Group by decile and result
+  summarize(count = n(), .groups = "drop") %>% # Create count column
+  as.data.frame() %>% # Convert to data frame
+  group_by(SVM_decile) %>%
+  mutate(SVM = (count / sum(count)) * 100) %>% # Create percentage column
+  ungroup() %>%
+  filter(preemptive_listing == 1) %>% # Keep only preemptive listing
+  select(SVM_decile, SVM) # Keep columns of interest
+svm_preemp
+
+## SVI
+svi_preemp <- study_cohort_df %>%
+  group_by(SVI_decile, preemptive_listing) %>% # Group by decile and result
+  summarize(count = n(), .groups = "drop") %>% # Create count column
+  as.data.frame() %>% # Convert to data frame
+  group_by(SVI_decile) %>%
+  mutate(SVI = (count / sum(count)) * 100) %>% # Create percentage column
+  ungroup() %>%
+  filter(preemptive_listing == 1) %>% # Keep only preemptive listing
+  select(SVI_decile, SVI)  # Keep columns of interest
+svi_preemp
+
+## ADI
+adi_preemp <- study_cohort_df %>%
+  group_by(ADI_decile, preemptive_listing) %>% # Group by decile and result
+  summarize(count = n(), .groups = "drop") %>% # Create count column
+  as.data.frame() %>% # Convert to data frame
+  group_by(ADI_decile) %>%
+  mutate(ADI = (count / sum(count)) * 100) %>% # Create percentage column
+  ungroup() %>%
+  filter(preemptive_listing == 1) %>% # Keep only preemptive listing
+  select(ADI_decile, ADI)  # Keep columns of interest
+adi_preemp
+
+## DCI
+dci_preemp <- study_cohort_df %>%
+  group_by(DCI_decile, preemptive_listing) %>% # Group by decile and result
+  summarize(count = n(), .groups = "drop") %>%# Create count column
+  as.data.frame() %>% # Convert to data frame
+  group_by(DCI_decile) %>%
+  mutate(DCI = (count / sum(count)) * 100) %>% # Create percentage column
+  ungroup() %>%
+  filter(preemptive_listing == 1) %>% # Keep only preemptive listing
+  select(DCI_decile, DCI)  # Keep columns of interest
+dci_preemp
+
+# Combine all data sets
+preemp_df <- cbind(svm_preemp, svi_preemp, adi_preemp, dci_preemp) %>% # Bind by columns
+  select(-SVI_decile, -ADI_decile, -DCI_decile) %>% # Remove extra decile columns
+  rename(decile = SVM_decile) # Rename to have single decile column
+preemp_df
+
+rm(svm_preemp, svi_preemp, adi_preemp, dci_preemp)
+
+# Reshape data
+preemp_df <- preemp_df %>% 
+  pivot_longer(cols = c(SVM, SVI, ADI, DCI), # Turn the data for easier graphing (columns to rows)
+               names_to = "index", # Set name of columns to "index"
+               values_to = "percent") # Set value of columns to "percent"
+
+# Create bar graph
+preemp_df_visual <- ggplot(preemp_df, aes(x = decile, y = percent, fill = index)) + # Set base
+  geom_col(position = "dodge") + # Columns to be side-by-side
+  labs(title = "Percentage of Preemptive Listing by Decile", # Set title
+       subtitle = "Data from SRTR 2024", # Set subtitle
+       x = "Decile", # Set x-axis label
+       y = "Percentage", # Set y-axis label
+       fill = "Index") + # Set legend title
+  scale_y_continuous(limits = c(0, 100), breaks = seq(0, 100, by = 10)) + # Create scale of y-axis
+  theme_classic() # Set theme (preference)
+preemp_df_visual # view
+
+# Save to PDF
+ggsave("/Users/edgaraguila/Desktop/School/Research Projects/UChicago Research/Data/dialysis_time_association Graphs/Preemptive Listing Percentages.pdf", plot = preemp_df_visual, height = 4, units = "in")
+```
+
+# Median Waiting Time at Initial Listing v. Decile Graph
+```{r}
+# Create wait_time_at_list column
+study_cohort_df <- study_cohort_df %>%
+  mutate(wait_time_at_list = dialysis_time_at_list)
+
+# SVM
+wait_time_svm <- study_cohort_df %>%
+  group_by(SVM_decile) %>% # Group by decile
+  summarize(SVM = median(wait_time_at_list, na.rm = T)) %>% # Create median of wait time
+  as.data.frame() # Convert to data frame
+
+# SVI
+wait_time_svi <- study_cohort_df %>%
+  group_by(SVI_decile) %>% # Group by decile
+  summarize(SVI = median(wait_time_at_list, na.rm = T)) %>% # Create median of wait time
+  as.data.frame() # Convert to data frame
+
+# ADI
+wait_time_adi <- study_cohort_df %>%
+  group_by(ADI_decile) %>% # Group by decile
+  summarize(ADI = median(wait_time_at_list, na.rm = T)) %>% # Create median of wait time
+  as.data.frame() # Convert to data frame
+
+# DCI
+wait_time_dci <- study_cohort_df %>%
+  group_by(DCI_decile) %>% # Group by decile
+  summarize(DCI = median(wait_time_at_list, na.rm = T)) %>% # Create median of wait time
+  as.data.frame() # Convert to data frame
+
+# Combine Data Frames
+wait_time_df <- cbind(wait_time_dci, wait_time_adi, wait_time_svi, wait_time_svm) %>% # Bind by columns
+  select(-SVI_decile, -ADI_decile, -DCI_decile) %>% # Remove extra decile columns
+  rename(decile = SVM_decile) # Rename to have single decile column
+wait_time_df # view
+
+rm(wait_time_svm, wait_time_svi, wait_time_adi, wait_time_dci) # Remove unnecessary data frames
+
+# Reshape data frame
+wait_time_df <- wait_time_df %>%
+  pivot_longer(cols = c(SVM, SVI, ADI, DCI), # Columns to move
+               names_to = "index", # Name of columns to new index column
+               values_to = "wait_time_at_list") # Value of columns to new wait time column
+
+wait_time_df$decile <- as.numeric(wait_time_df$decile) # Convert decile to numeric
+
+# Plot graph
+wait_time_df_visual <- ggplot(wait_time_df, aes(x = decile, y = wait_time_at_list, color = index)) + # Set base
+  geom_line() + # Set line graph
+  theme_classic() + # Set theme (preference)
+  labs(title = "Median Wait Time at Listing by Decile", # Set title
+       subtitle = "Data from SRTR 2024", # Set subtitle
+       x = "Decile", # Set x-axis label
+       y = "Median Wait Time at Listing (Years)", # Set y-axis label
+       color = "Index") + # Set legend title
+  scale_x_continuous(limits = c(1, 10), breaks = seq(1, 10, by = 1)) # Set 1 through 10 ticks on x-axis
+wait_time_df_visual # view
+
+# Save to PDF
+ggsave("/Users/edgaraguila/Desktop/School/Research Projects/UChicago Research/Data/dialysis_time_association Graphs/Wait Time Graph.pdf", plot = wait_time_df_visual, height = 4, units = "in")
+```
+
+# Mean EPTS Score v. Decile Graphs
+```{r}
+# SVM
+epts_svm <- study_cohort_df %>%
+  group_by(SVM_decile) %>% # Group by decile
+  summarize(SVM = mean(raw_epts, na.rm = T)) %>% # Calculate mean column
+  as.data.frame() # Convert to data frame
+
+# SVI
+epts_svi <- study_cohort_df %>%
+  group_by(SVI_decile) %>% # Group by decile
+  summarize(SVI = mean(raw_epts, na.rm = T)) %>% # Calculate mean column
+  as.data.frame() # Convert to data frame
+
+# ADI
+epts_adi <- study_cohort_df %>%
+  group_by(ADI_decile) %>% # Group by decile
+  summarize(ADI = mean(raw_epts, na.rm = T)) %>% # Calculate mean column
+  as.data.frame() # Convert to data frame
+
+# DCI
+epts_dci <- study_cohort_df %>%
+  group_by(DCI_decile) %>% # Group by decile
+  summarize(DCI = mean(raw_epts, na.rm = T)) %>% # Calculate mean column
+  as.data.frame() # Convert to data frame
+
+# Combine data frames
+epts_df <- cbind(epts_svm, epts_svi, epts_adi, epts_dci) %>% # Bind by columns
+  select(-SVI_decile, -ADI_decile, -DCI_decile) %>% # Remove extra decile columns
+  rename(decile = SVM_decile) # Rename to have single decile column
+epts_df
+
+rm(epts_adi, epts_dci, epts_svi, epts_svm) # Remove excess data frames
+
+# Reshape Data Frame
+epts_df <- epts_df %>%
+  pivot_longer(cols = c(SVM, SVI, ADI, DCI), # Turn table for easier graphing
+               names_to = "index",
+               values_to = "mean_epts")
+
+epts_df$decile <- as.numeric(epts_df$decile) # Convert to numeric
+epts_df$index <- as.factor(epts_df$index) # Convert to factor
+
+# Graph Mean EPTS v. Decile
+epts_df_visual <- ggplot(epts_df, aes(x = decile, y = mean_epts, color = index)) + # Set base
+  geom_point() + # Set points for indices
+  geom_line() +  # Set lines for indices
+  facet_wrap(~ index) + # Create 4 separate grids
+  scale_x_continuous(limits = c(1, 10), breaks = seq(1, 10, by = 1)) + # Set x-axis as desired
+  theme_bw() + # Set theme 
+  scale_color_manual(values = c("SVM" = "#C77CFF", "SVI" = "#00BFC4", "ADI" = "#F8766D", "DCI" = "#7CAE00")) + # Set colors for indices
+  labs(title = "Mean EPTS Score by Decile", # Set title
+       subtitle = "Data from SRTR 2024 and EPTS Database", # Set subtitle
+       x = "Decile", # Set x-axis label
+       y = "Mean EPTS Score") + # Set y-axis label
+  theme(legend.position = "none") # Remove legend
+epts_df_visual # view
+
+# Save to PDF
+ggsave("/Users/edgaraguila/Desktop/School/Research Projects/UChicago Research/Data/dialysis_time_association Graphs/Mean EPTS v. Decile.pdf", plot = epts_df_visual, height = 5, units = "in")
+```
+
+# Top 20% EPTS v. Decile
+```{r}
+epts_20_svm <- study_cohort_df %>%
+  group_by(SVM_decile, top_percentile_epts) %>%
+  summarize(SVM = n(), .groups = "drop") %>%
+  as.data.frame() %>%
+  filter(top_percentile_epts == "1") %>%
+  select(-top_percentile_epts)
+
+epts_20_svi <- study_cohort_df %>%
+  group_by(SVI_decile, top_percentile_epts) %>%
+  summarize(SVI = n(), .groups = "drop") %>%
+  as.data.frame() %>%
+  filter(top_percentile_epts == "1") %>%
+  select(-top_percentile_epts)
+
+epts_20_adi <- study_cohort_df %>%
+  group_by(ADI_decile, top_percentile_epts) %>%
+  summarize(ADI = n(), .groups = "drop") %>%
+  as.data.frame() %>%
+  filter(top_percentile_epts == "1") %>%
+  select(-top_percentile_epts)
+
+epts_20_dci <- study_cohort_df %>%
+  group_by(DCI_decile, top_percentile_epts) %>%
+  summarize(DCI = n(), .groups = "drop") %>%
+  as.data.frame() %>%
+  filter(top_percentile_epts == "1") %>%
+  select(-top_percentile_epts)
+
+# Combine Data Frames
+epts_20_df <- cbind(epts_20_svm, epts_20_svi, epts_20_adi, epts_20_dci) %>% # Bind by columns
+  select(-SVI_decile, -ADI_decile, -DCI_decile) %>% # Remove extra decile columns
+  rename(decile = SVM_decile) # Rename to have single decile column
+epts_20_df # view
+
+rm(epts_20_svm, epts_20_svi, epts_20_adi, epts_20_dci) # Remove unnecessary data frames
+
+# Reshape data frame
+epts_20_df <- epts_20_df %>%
+  pivot_longer(cols = c(SVM, SVI, ADI, DCI), # Columns to move
+               names_to = "index", # Name of columns to new index column
+               values_to = "count") # Value of columns to new wait time column
+
+epts_20_df$decile <- as.numeric(epts_20_df$decile) # Convert decile to numeric
+
+# Plot graph
+epts_20_df_visual <- ggplot(epts_20_df, aes(x = decile, y = count, color = index)) + # Set base
+  geom_point() + # Set points for graph
+  theme_classic() + # Set theme (preference)
+  scale_x_continuous(limits = c(1, 10), breaks = seq(1, 10, by = 1)) + # Set 1 through 10 ticks on x-axis
+  labs(title = "Number of Top 20% EPTS Candidates by Decile", # Set title
+       subtitle = "Data from SRTR 2024 and EPTS Database", # Set subtitle
+       x = "Decile", # Set x-axis label
+       y = "Number of Candidates", # Set y-axis label
+       color = "Index") # Set legend title
+epts_20_df_visual # view
+
+# Save to PDF
+ggsave("/Users/edgaraguila/Desktop/School/Research Projects/UChicago Research/Data/dialysis_time_association Graphs/Top 20 EPTS Graph.pdf", plot = epts_20_df_visual, height = 5, units = "in")
+```
+
+# Zero-Inflated Negative Binomial Model
+```{r}
+#install.packages("pscl") # Unhashtag to activate
+library(pscl)
+
+# Convert dialysis_time_at_list back to days
+study_cohort_df <- study_cohort_df %>%
+  mutate(dialysis_time_at_list = case_when(
+    is.na(CAN_DIAL_DT) | as.Date(min_list_date) < as.Date(CAN_DIAL_DT) ~ 0, # Input 0 for patients never on dialysis
+    T ~ as.numeric(difftime(min_list_date, CAN_DIAL_DT))
+  ))
+
+# Reset baseline to 5th decile
+study_cohort_df$SVM_decile <- relevel(study_cohort_df$SVM_decile, ref = "5")
+study_cohort_df$SVI_decile <- relevel(study_cohort_df$SVI_decile, ref = "5")
+study_cohort_df$ADI_decile <- relevel(study_cohort_df$ADI_decile, ref = "5")
+study_cohort_df$DCI_decile <- relevel(study_cohort_df$DCI_decile, ref = "5")
+
+# Create model
+## SVM
+ZINB_svm <- zeroinfl(dialysis_time_at_list ~ SVM_decile | preemptive_listing, data = study_cohort_df)
+ZINB_svm
+
+## SVI
+ZINB_svi <- zeroinfl(dialysis_time_at_list ~ SVI_decile | preemptive_listing, data = study_cohort_df)
+ZINB_svi
+
+## SVM
+ZINB_adi <- zeroinfl(dialysis_time_at_list ~ ADI_decile | preemptive_listing, data = study_cohort_df)
+ZINB_adi
+
+## SVM
+ZINB_dci <- zeroinfl(dialysis_time_at_list ~ DCI_decile | preemptive_listing, data = study_cohort_df)
+ZINB_dci
+```
