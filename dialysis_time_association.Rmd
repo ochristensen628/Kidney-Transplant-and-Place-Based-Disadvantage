@@ -54,41 +54,33 @@ lm_df # view
 # Create Coefficient columns
 lm_df <- lm_df %>%
   mutate(
-    coefficient_svm = coef(svm_lm)[-1], # SVM
-    coefficient_svi = coef(svi_lm)[-1], # SVI
-    coefficient_adi = coef(adi_lm)[-1], # ADI
-    coefficient_dci = coef(dci_lm)[-1] # DCI
+    exp_coeff_svm = exp(coef(svm_lm)[-1]), # SVM
+    exp_coeff_svi = exp(coef(svi_lm)[-1]), # SVI
+    exp_coeff_adi = exp(coef(adi_lm)[-1]), # ADI
+    exp_coeff_dci = exp(coef(dci_lm)[-1]) # DCI
   )
 lm_df # view
 
 # Insert baseline row
 lm_df <- lm_df %>%
-  rbind(data.frame(decile = 5, coefficient_svm = 0, coefficient_svi = 0, coefficient_adi = 0, coefficient_dci = 0))
+  rbind(data.frame(decile = 5, exp_coeff_svm = 1, exp_coeff_svi = 1, exp_coeff_adi = 1, exp_coeff_dci = 1))
 
 lm_df <- lm_df[order(lm_df$decile), ] # Put decile column in order
 lm_df # view
 
 # Create Graph
 lm_df_visual <- ggplot(lm_df, aes(x = decile)) + # Set base
-  geom_line(aes(y = coefficient_svm, color = "SVM")) + # SVM
-  geom_line(aes(y = coefficient_svi, color = "SVI")) + # SVI
-  geom_line(aes(y = coefficient_adi, color = "ADI")) + # ADI
-  geom_line(aes(y = coefficient_dci, color = "DCI")) + # DCI
+  geom_line(aes(y = exp_coeff_svm, color = "SVM")) + # SVM
+  geom_line(aes(y = exp_coeff_svi, color = "SVI")) + # SVI
+  geom_line(aes(y = exp_coeff_adi, color = "ADI")) + # ADI
+  geom_line(aes(y = exp_coeff_dci, color = "DCI")) + # DCI
   theme_classic() + # Set theme (preference)
-  geom_hline(yintercept = 0, color = "black") + # Set x-axis to y = 0
   labs(title = "Linear Model Coefficients of Dialysis by Decile", # Set title
        subtitle = "Data from SRTR 2024", # Set subtitle
-       x = "Composite Score Decile", # Set x-axis label
-       y = "Correlation Coefficient") + # Set y-axis label
-  theme(axis.line.x = element_blank(), # Remove original x-axis line
-        axis.ticks.x = element_blank(), # Remove original x-axis ticks
-        axis.text.x = element_text(vjust = 52)) + # Raise x-axis labels to match new x-axis line at y = 0 (looks bad here but good on PDF)
-  geom_segment(aes(x = decile, # Add new tick indicators
-                   xend = decile, 
-                   y = 0.02, 
-                   yend = -0.02), 
-               color = "black") + 
-  scale_x_continuous(breaks = 1:10, # Create new tick breaks in new x-axis line at y = 0
+       x = "Decile", # Set x-axis label
+       y = "Correlation Coefficient", # Set y-axis label
+       color = "Index") + # Set legend title
+  scale_x_continuous(breaks = 1:10, # Create tick markers
                      labels = 1:10)
 lm_df_visual # view
 
@@ -138,41 +130,33 @@ lm_log_df # view
 # Create Coefficient columns
 lm_log_df <- lm_log_df %>%
   mutate(
-    coefficient_svm = coef(svm_lm_log)[-1], # SVM
-    coefficient_svi = coef(svi_lm_log)[-1], # SVI
-    coefficient_adi = coef(adi_lm_log)[-1], # ADI
-    coefficient_dci = coef(dci_lm_log)[-1] # DCI
+    exp_coeff_svm = exp(coef(svm_lm_log)[-1]), # SVM
+    exp_coeff_svi = exp(coef(svi_lm_log)[-1]), # SVI
+    exp_coeff_adi = exp(coef(adi_lm_log)[-1]), # ADI
+    exp_coeff_dci = exp(coef(dci_lm_log)[-1]) # DCI
   )
 lm_log_df # view
 
 # Insert baseline row
 lm_log_df <- lm_log_df %>%
-  rbind(data.frame(decile = 5, coefficient_svm = 0, coefficient_svi = 0, coefficient_adi = 0, coefficient_dci = 0))
+  rbind(data.frame(decile = 5, exp_coeff_svm = 1, exp_coeff_svi = 1, exp_coeff_adi = 1, exp_coeff_dci = 1))
 
 lm_log_df <- lm_log_df[order(lm_log_df$decile), ] # Put decile column in order
 lm_log_df # view
 
 # Create Graph
 lm_log_df_visual <- ggplot(lm_log_df, aes(x = decile)) + # Set base
-  geom_line(aes(y = coefficient_svm, color = "SVM")) + # SVM
-  geom_line(aes(y = coefficient_svi, color = "SVI")) + # SVI
-  geom_line(aes(y = coefficient_adi, color = "ADI")) + # ADI
-  geom_line(aes(y = coefficient_dci, color = "DCI")) + # DCI
+  geom_line(aes(y = exp_coeff_svm, color = "SVM")) + # SVM
+  geom_line(aes(y = exp_coeff_svi, color = "SVI")) + # SVI
+  geom_line(aes(y = exp_coeff_adi, color = "ADI")) + # ADI
+  geom_line(aes(y = exp_coeff_dci, color = "DCI")) + # DCI
   theme_classic() + # Set theme (preference)
-  geom_hline(yintercept = 0, color = "black") + # Set x-axis to y = 0
   labs(title = "Linear Model Coefficients of Log of Dialysis by Decile", # Set title
        subtitle = "Data from SRTR 2024", # Set subtitle
-       x = "Composite Score Decile", # Set x-axis label
-       y = "Correlation Coefficient Log of Dialysis") + # Set y-axis label
-  theme(axis.line.x = element_blank(), # Remove original x-axis line
-        axis.ticks.x = element_blank(), # Remove original x-axis ticks
-        axis.text.x = element_text(vjust = 51)) + # Raise x-axis labels to match new x-axis line at y = 0
-  geom_segment(aes(x = decile, # Add new tick indicators
-                   xend = decile, 
-                   y = 0.0075, 
-                   yend = -0.0075), 
-               color = "black") + 
-  scale_x_continuous(breaks = 1:10, # Create new tick breaks in new x-axis line at y = 0
+       x = "Decile", # Set x-axis label
+       y = "Correlation Coefficient Log of Dialysis", # Set y-axis label
+       color = "Index") + # Set legend title
+  scale_x_continuous(breaks = 1:10, # Create tick markers
                      labels = 1:10)
 lm_log_df_visual # view
 
@@ -213,16 +197,16 @@ lr_df # view
 # Create Coefficient columns
 lr_df <- lr_df %>%
   mutate(
-    SVM = coef(svm_glm)[-1], # SVM
-    SVI = coef(svi_glm)[-1], # SVI
-    ADI = coef(adi_glm)[-1], # ADI
-    DCI = coef(dci_glm)[-1] # DCI
+    SVM = exp(coef(svm_glm)[-1]), # SVM
+    SVI = exp(coef(svi_glm)[-1]), # SVI
+    ADI = exp(coef(adi_glm)[-1]), # ADI
+    DCI = exp(coef(dci_glm)[-1]) # DCI
   )
 lr_df # view
 
 # Insert baseline row
 lr_df <- lr_df %>%
-  rbind(data.frame(decile = 5, SVM = 0, SVI = 0, ADI = 0, DCI = 0))
+  rbind(data.frame(decile = 5, SVM = 1, SVI = 1, ADI = 1, DCI = 1))
 
 lr_df <- lr_df[order(lr_df$decile), ] # Put decile column in order
 lr_df # view
@@ -234,20 +218,12 @@ lr_df_visual <- ggplot(lr_df, aes(x = decile)) + # Set base
   geom_line(aes(y = ADI, color = "ADI")) + # ADI
   geom_line(aes(y = DCI, color = "DCI")) + # DCI
   theme_classic() + # Set theme (preference)
-  geom_hline(yintercept = 0, color = "black") + # Set x-axis to y = 0
   labs(title = "Logistic Regression Coefficients of Preemptive Listing by Decile", # Set title
        subtitle = "Data from SRTR 2024", # Set subtitle
        x = "Decile", # Set x-axis label
-       y = "Correlation Coefficient of Preemptive Listing") + # Set y-axis label
-  theme(axis.line.x = element_blank(), # Remove original x-axis line
-        axis.ticks.x = element_blank(), # Remove original x-axis ticks
-        axis.text.x = element_text(vjust = 58)) + # Raise x-axis labels to match new x-axis line at y = 0
-  geom_segment(aes(x = decile, # Add new tick indicators
-                   xend = decile, 
-                   y = 0.02, 
-                   yend = -0.02), 
-               color = "black") + 
-  scale_x_continuous(breaks = 1:10, # Create new tick breaks in new x-axis line at y = 0
+       y = "Correlation Coefficient of Preemptive Listing", # Set y-axis label
+       color = "Index") + # Set legend title
+  scale_x_continuous(breaks = 1:10, # Create tick markers
                      labels = 1:10)
 lr_df_visual # view
 
@@ -278,56 +254,69 @@ study_cohort_df$DCI_decile <- relevel(study_cohort_df$DCI_decile, ref = "2")
 study_cohort_df$DCI_decile <- relevel(study_cohort_df$DCI_decile, ref = "1")
 ```
 
-# Median Dialysis TIme v. Decile Graph
+# Median Dialysis Time v. Decile Graph (Working)
 ```{r}
 # Median Dialysis Time v. Decile (visual)
+# Convert dialysis_time_at_list back to years
+study_cohort_df <- study_cohort_df %>%
+  mutate(dialysis_time_at_list = case_when(
+    is.na(CAN_DIAL_DT) | as.Date(min_list_date) < as.Date(CAN_DIAL_DT) ~ 0, # Input 0 for patients never on dialysis
+    T ~ as.numeric(difftime(min_list_date, CAN_DIAL_DT)) / 365 # Turn to year
+  ))
+
 # SVM
 svm_dialysis <- study_cohort_df %>% # Create data frame for SVM Decile v. Dialysis Time
   group_by(SVM_decile) %>% # Group by decile
-  summarize(median_dialysis_svm = median(dialysis_time_at_list, na.rm = T)) # Calculate median
-svm_dialysis
+  summarize(SVM = dialysis_time_at_list) # Calculate median
+svm_dialysis # view
 
 # SVI
 svi_dialysis <- study_cohort_df %>% # Create data frame for SVI Decile v. Dialysis Time
   group_by(SVI_decile) %>% # Group by decile
-  summarize(median_dialysis_svi = median(dialysis_time_at_list, na.rm = T)) # Calculate median
-svi_dialysis
+  summarize(SVI = dialysis_time_at_list) # Calculate median
+svi_dialysis # view
 
 # ADI
 adi_dialysis <- study_cohort_df %>% # Create data frame for ADI Decile v. Dialysis Time
   group_by(ADI_decile) %>% # Group by decile
-  summarize(median_dialysis_adi = median(dialysis_time_at_list, na.rm = T)) # Calculate median
-adi_dialysis
+  summarize(ADI = dialysis_time_at_list) # Calculate median
+adi_dialysis # view
 
 # DCI
 dci_dialysis <- study_cohort_df %>% # Create data frame for DCI Decile v. Dialysis Time
   group_by(DCI_decile) %>% # Group by decile
-  summarize(median_dialysis_dci = median(dialysis_time_at_list, na.rm = T)) # Calculate median
-dci_dialysis
+  summarize(DCI = dialysis_time_at_list) # Calculate median
+dci_dialysis # view
 
-# Let's create a scatter plot of mean days vs composite score decile, we first need to join the data
+# Join data frames
 dialysis_v_decile <- bind_cols(svm_dialysis, svi_dialysis, adi_dialysis, dci_dialysis) %>% # Combine all data
   mutate(decile = SVM_decile) %>% # Change one decile column to "decile"
   select(-SVM_decile, -SVI_decile, -ADI_decile, -DCI_decile) # Remove other decile columns
 dialysis_v_decile
 
-dialysis_v_decile$decile <- as.numeric(dialysis_v_decile$decile) # Set decile to numeric
+rm(svm_dialysis, svi_dialysis, adi_dialysis, dci_dialysis) # Remove intermediate data frames
+
+# Reshape data frame
+dialysis_v_decile <- dialysis_v_decile %>%
+  pivot_longer(cols = c(SVM, SVI, ADI, DCI), # Select columns
+               names_to = "index", # Name of columns to "index"
+               values_to = "dialysis_time") # values of column to "dialysis_time
+
+dialysis_v_decile$decile <- as.factor(dialysis_v_decile$decile) # Set decile to factor
 
 # Visualize graph
 dialysis_v_decile_viz <- dialysis_v_decile %>% # Use this data frame
-  ggplot(aes(x = decile)) + # Set x-axis
-  geom_line(aes(y = median_dialysis_svm, color = "SVM")) + # Set each y-axis to an SDoH Index 
-  geom_line(aes(y = median_dialysis_svi, color = "SVI")) + 
-  geom_line(aes(y = median_dialysis_adi, color = "ADI")) + 
-  geom_line(aes(y = median_dialysis_dci, color = "DCI")) + 
-  labs(title = "Median Dialysis Time at Listing by Decile", # Set title
+  ggplot(aes(x = decile, y = dialysis_time, fill = index)) + # Set x-axis
+  geom_boxplot() + # Create Boxplot for graph
+  facet_wrap(~ index) + # Create grid
+  theme_bw() + # Set theme to classic (preference)
+  scale_y_continuous(limits = c(0, 5), breaks = seq(0, 5, by = 1)) + # Create specific y-axis scale
+  labs(title = "Dialysis Time at Listing by Decile", # Set title
        subtitle = "Data from SRTR 2024", # Set subtitle
-       x = "Composite Score Decile", # set x-axis title
-       y = "Median Dialysis Time (Year)") + # set y-axis title
-  guides(color = guide_legend(title = "Composite Score")) + # set legend title
-  theme_classic() + # Set theme to classic (preference)
-  scale_x_continuous(limits = c(1, 10), breaks = seq(1, 10, by = 1)) # Set 1 through 10 ticks on x-axis
-dialysis_v_decile_viz
+       x = "Decile", # Set x-axis label
+       y = "Dialysis Time at Listing (Year)", # Set y-axis label
+       fill = "Index") # Set legend title
+dialysis_v_decile_viz # view
 
 # Save to PDF
 ggsave("/Users/edgaraguila/Desktop/School/Research Projects/UChicago Research/Data/dialysis_time_association Graphs/Median Dialysis Time v. Decile.pdf", plot = dialysis_v_decile_viz, height = 4, units = "in")
@@ -390,11 +379,11 @@ preemp_df <- cbind(svm_preemp, svi_preemp, adi_preemp, dci_preemp) %>% # Bind by
   rename(decile = SVM_decile) # Rename to have single decile column
 preemp_df
 
-rm(svm_preemp, svi_preemp, adi_preemp, dci_preemp)
+rm(svm_preemp, svi_preemp, adi_preemp, dci_preemp) # Remove intermediate data frames
 
 # Reshape data
 preemp_df <- preemp_df %>% 
-  pivot_longer(cols = c(SVM, SVI, ADI, DCI), # Turn the data for easier graphing (columns to rows)
+  pivot_longer(cols = c(SVM, SVI, ADI, DCI), # Turn the data for easier graphing 
                names_to = "index", # Set name of columns to "index"
                values_to = "percent") # Set value of columns to "percent"
 
@@ -406,100 +395,58 @@ preemp_df_visual <- ggplot(preemp_df, aes(x = decile, y = percent, fill = index)
        x = "Decile", # Set x-axis label
        y = "Percentage", # Set y-axis label
        fill = "Index") + # Set legend title
-  scale_y_continuous(limits = c(0, 100), breaks = seq(0, 100, by = 10)) + # Create scale of y-axis
-  theme_classic() # Set theme (preference)
+  theme_classic() + # Set theme (preference)
+  scale_y_continuous(limits = c(0, 60), breaks = seq(0, 60, by = 10))
 preemp_df_visual # view
 
 # Save to PDF
 ggsave("/Users/edgaraguila/Desktop/School/Research Projects/UChicago Research/Data/dialysis_time_association Graphs/Preemptive Listing Percentages.pdf", plot = preemp_df_visual, height = 4, units = "in")
 ```
 
-# Median Waiting Time at Initial Listing v. Decile Graph
-```{r}
-# Create wait_time_at_list column
-study_cohort_df <- study_cohort_df %>%
-  mutate(wait_time_at_list = dialysis_time_at_list)
-
-# SVM
-wait_time_svm <- study_cohort_df %>%
-  group_by(SVM_decile) %>% # Group by decile
-  summarize(SVM = median(wait_time_at_list, na.rm = T)) %>% # Create median of wait time
-  as.data.frame() # Convert to data frame
-
-# SVI
-wait_time_svi <- study_cohort_df %>%
-  group_by(SVI_decile) %>% # Group by decile
-  summarize(SVI = median(wait_time_at_list, na.rm = T)) %>% # Create median of wait time
-  as.data.frame() # Convert to data frame
-
-# ADI
-wait_time_adi <- study_cohort_df %>%
-  group_by(ADI_decile) %>% # Group by decile
-  summarize(ADI = median(wait_time_at_list, na.rm = T)) %>% # Create median of wait time
-  as.data.frame() # Convert to data frame
-
-# DCI
-wait_time_dci <- study_cohort_df %>%
-  group_by(DCI_decile) %>% # Group by decile
-  summarize(DCI = median(wait_time_at_list, na.rm = T)) %>% # Create median of wait time
-  as.data.frame() # Convert to data frame
-
-# Combine Data Frames
-wait_time_df <- cbind(wait_time_dci, wait_time_adi, wait_time_svi, wait_time_svm) %>% # Bind by columns
-  select(-SVI_decile, -ADI_decile, -DCI_decile) %>% # Remove extra decile columns
-  rename(decile = SVM_decile) # Rename to have single decile column
-wait_time_df # view
-
-rm(wait_time_svm, wait_time_svi, wait_time_adi, wait_time_dci) # Remove unnecessary data frames
-
-# Reshape data frame
-wait_time_df <- wait_time_df %>%
-  pivot_longer(cols = c(SVM, SVI, ADI, DCI), # Columns to move
-               names_to = "index", # Name of columns to new index column
-               values_to = "wait_time_at_list") # Value of columns to new wait time column
-
-wait_time_df$decile <- as.numeric(wait_time_df$decile) # Convert decile to numeric
-
-# Plot graph
-wait_time_df_visual <- ggplot(wait_time_df, aes(x = decile, y = wait_time_at_list, color = index)) + # Set base
-  geom_line() + # Set line graph
-  theme_classic() + # Set theme (preference)
-  labs(title = "Median Wait Time at Listing by Decile", # Set title
-       subtitle = "Data from SRTR 2024", # Set subtitle
-       x = "Decile", # Set x-axis label
-       y = "Median Wait Time at Listing (Years)", # Set y-axis label
-       color = "Index") + # Set legend title
-  scale_x_continuous(limits = c(1, 10), breaks = seq(1, 10, by = 1)) # Set 1 through 10 ticks on x-axis
-wait_time_df_visual # view
-
-# Save to PDF
-ggsave("/Users/edgaraguila/Desktop/School/Research Projects/UChicago Research/Data/dialysis_time_association Graphs/Wait Time Graph.pdf", plot = wait_time_df_visual, height = 4, units = "in")
-```
-
-# Mean EPTS Score v. Decile Graphs
+# Mean EPTS Score v. Decile Boxplot (Working)
 ```{r}
 # SVM
 epts_svm <- study_cohort_df %>%
   group_by(SVM_decile) %>% # Group by decile
-  summarize(SVM = mean(raw_epts, na.rm = T)) %>% # Calculate mean column
+  summarize(
+    svm_lower = min(raw_epts), # 
+    svm_ymin = quantile(raw_epts, 0.25),
+    svm_mean = mean(raw_epts),
+    svm_ymax = quantile(raw_epts, 0.75),
+    svm_upper = max(raw_epts)) %>% 
   as.data.frame() # Convert to data frame
 
 # SVI
 epts_svi <- study_cohort_df %>%
   group_by(SVI_decile) %>% # Group by decile
-  summarize(SVI = mean(raw_epts, na.rm = T)) %>% # Calculate mean column
+  summarize(
+    svi_lower = min(raw_epts),
+    svi_ymin = quantile(raw_epts, 0.25),
+    svi_mean = mean(raw_epts),
+    svi_ymax = quantile(raw_epts, 0.75),
+    svi_upper = max(raw_epts)) %>% 
   as.data.frame() # Convert to data frame
 
 # ADI
 epts_adi <- study_cohort_df %>%
   group_by(ADI_decile) %>% # Group by decile
-  summarize(ADI = mean(raw_epts, na.rm = T)) %>% # Calculate mean column
+  summarize(
+    adi_lower = min(raw_epts),
+    adi_ymin = quantile(raw_epts, 0.25),
+    adi_mean = mean(raw_epts),
+    adi_ymax = quantile(raw_epts, 0.75),
+    adi_upper = max(raw_epts)) %>% 
   as.data.frame() # Convert to data frame
 
 # DCI
 epts_dci <- study_cohort_df %>%
   group_by(DCI_decile) %>% # Group by decile
-  summarize(DCI = mean(raw_epts, na.rm = T)) %>% # Calculate mean column
+  summarize(
+    dci_lower = min(raw_epts),
+    dci_ymin = quantile(raw_epts, 0.25),
+    dci_mean = mean(raw_epts),
+    dci_ymax = quantile(raw_epts, 0.75),
+    dci_upper = max(raw_epts)) %>% 
   as.data.frame() # Convert to data frame
 
 # Combine data frames
@@ -510,28 +457,39 @@ epts_df
 
 rm(epts_adi, epts_dci, epts_svi, epts_svm) # Remove excess data frames
 
-# Reshape Data Frame
 epts_df <- epts_df %>%
-  pivot_longer(cols = c(SVM, SVI, ADI, DCI), # Turn table for easier graphing
-               names_to = "index",
-               values_to = "mean_epts")
+  pivot_longer(cols = starts_with("svm") | starts_with("svi") | starts_with("adi") | starts_with("dci"),
+               names_to = c("index", "stat"),
+               names_pattern = "(.*)_(.*)",
+               values_to = "value") %>%
+  pivot_wider(names_from = stat,
+              values_from = value)
 
-epts_df$decile <- as.numeric(epts_df$decile) # Convert to numeric
-epts_df$index <- as.factor(epts_df$index) # Convert to factor
+epts_df$decile <- as.factor(epts_df$decile) # Convert to factor
+
+facet_labels <- c(
+  adi = "ADI",
+  dci = "DCI",
+  svi = "SVI",
+  svm = "SVM"
+)
 
 # Graph Mean EPTS v. Decile
-epts_df_visual <- ggplot(epts_df, aes(x = decile, y = mean_epts, color = index)) + # Set base
-  geom_point() + # Set points for indices
-  geom_line() +  # Set lines for indices
-  facet_wrap(~ index) + # Create 4 separate grids
-  scale_x_continuous(limits = c(1, 10), breaks = seq(1, 10, by = 1)) + # Set x-axis as desired
+epts_df_visual <- ggplot(epts_df, aes(x = decile, fill = index)) + # Set base
+  geom_boxplot(aes(
+    ymin = lower,
+    lower = ymin,
+    middle = mean,
+    upper = ymax,
+    ymax = upper
+  ), stat = "identity") +
+  facet_wrap(~ index, labeller = labeller(index = facet_labels)) + # Create facet grid
   theme_bw() + # Set theme 
-  scale_color_manual(values = c("SVM" = "#C77CFF", "SVI" = "#00BFC4", "ADI" = "#F8766D", "DCI" = "#7CAE00")) + # Set colors for indices
-  labs(title = "Mean EPTS Score by Decile", # Set title
-       subtitle = "Data from SRTR 2024 and EPTS Database", # Set subtitle
-       x = "Decile", # Set x-axis label
-       y = "Mean EPTS Score") + # Set y-axis label
-  theme(legend.position = "none") # Remove legend
+  theme(legend.position = "none") + # Remove legend
+  labs(title = "Mean EPTS Score by Decile",
+       subtitle = "Data from SRTR 2024 and EPTS Database",
+       x = "Decile",
+       y = "EPTS Score") 
 epts_df_visual # view
 
 # Save to PDF
@@ -540,60 +498,79 @@ ggsave("/Users/edgaraguila/Desktop/School/Research Projects/UChicago Research/Da
 
 # Top 20% EPTS v. Decile
 ```{r}
+# Create data frame
+## SVM
 epts_20_svm <- study_cohort_df %>%
-  group_by(SVM_decile, top_percentile_epts) %>%
-  summarize(SVM = n(), .groups = "drop") %>%
-  as.data.frame() %>%
-  filter(top_percentile_epts == "1") %>%
-  select(-top_percentile_epts)
+  group_by(SVM_decile, top_percentile_epts) %>% # Group by decile and result
+  summarize(count = n(), .groups = "drop") %>% # Create count column
+  as.data.frame() %>% # Convert to data frame
+  group_by(SVM_decile) %>%
+  mutate(SVM = (count / sum(count)) * 100) %>% # Create percentage column
+  ungroup() %>%
+  filter(top_percentile_epts == 1) %>% # Keep only preemptive listing
+  select(SVM_decile, SVM) # Keep columns of interest
+epts_20_svm
 
+## SVI
 epts_20_svi <- study_cohort_df %>%
-  group_by(SVI_decile, top_percentile_epts) %>%
-  summarize(SVI = n(), .groups = "drop") %>%
-  as.data.frame() %>%
-  filter(top_percentile_epts == "1") %>%
-  select(-top_percentile_epts)
+  group_by(SVI_decile, top_percentile_epts) %>% # Group by decile and result
+  summarize(count = n(), .groups = "drop") %>% # Create count column
+  as.data.frame() %>% # Convert to data frame
+  group_by(SVI_decile) %>%
+  mutate(SVI = (count / sum(count)) * 100) %>% # Create percentage column
+  ungroup() %>%
+  filter(top_percentile_epts == 1) %>% # Keep only preemptive listing
+  select(SVI_decile, SVI)  # Keep columns of interest
+epts_20_svi
 
+## ADI
 epts_20_adi <- study_cohort_df %>%
-  group_by(ADI_decile, top_percentile_epts) %>%
-  summarize(ADI = n(), .groups = "drop") %>%
-  as.data.frame() %>%
-  filter(top_percentile_epts == "1") %>%
-  select(-top_percentile_epts)
+  group_by(ADI_decile, top_percentile_epts) %>% # Group by decile and result
+  summarize(count = n(), .groups = "drop") %>% # Create count column
+  as.data.frame() %>% # Convert to data frame
+  group_by(ADI_decile) %>%
+  mutate(ADI = (count / sum(count)) * 100) %>% # Create percentage column
+  ungroup() %>%
+  filter(top_percentile_epts == 1) %>% # Keep only preemptive listing
+  select(ADI_decile, ADI)  # Keep columns of interest
+epts_20_adi
 
+## DCI
 epts_20_dci <- study_cohort_df %>%
-  group_by(DCI_decile, top_percentile_epts) %>%
-  summarize(DCI = n(), .groups = "drop") %>%
-  as.data.frame() %>%
-  filter(top_percentile_epts == "1") %>%
-  select(-top_percentile_epts)
+  group_by(DCI_decile, top_percentile_epts) %>% # Group by decile and result
+  summarize(count = n(), .groups = "drop") %>%# Create count column
+  as.data.frame() %>% # Convert to data frame
+  group_by(DCI_decile) %>%
+  mutate(DCI = (count / sum(count)) * 100) %>% # Create percentage column
+  ungroup() %>%
+  filter(top_percentile_epts == 1) %>% # Keep only preemptive listing
+  select(DCI_decile, DCI)  # Keep columns of interest
+epts_20_dci
 
-# Combine Data Frames
+# Combine all data sets
 epts_20_df <- cbind(epts_20_svm, epts_20_svi, epts_20_adi, epts_20_dci) %>% # Bind by columns
   select(-SVI_decile, -ADI_decile, -DCI_decile) %>% # Remove extra decile columns
   rename(decile = SVM_decile) # Rename to have single decile column
-epts_20_df # view
+epts_20_df
 
-rm(epts_20_svm, epts_20_svi, epts_20_adi, epts_20_dci) # Remove unnecessary data frames
+rm(epts_20_svm, epts_20_svi, epts_20_adi, epts_20_dci)
 
-# Reshape data frame
-epts_20_df <- epts_20_df %>%
-  pivot_longer(cols = c(SVM, SVI, ADI, DCI), # Columns to move
-               names_to = "index", # Name of columns to new index column
-               values_to = "count") # Value of columns to new wait time column
+# Reshape data
+epts_20_df <- epts_20_df %>% 
+  pivot_longer(cols = c(SVM, SVI, ADI, DCI), # Turn the data for easier graphing (columns to rows)
+               names_to = "index", # Set name of columns to "index"
+               values_to = "percent") # Set value of columns to "percent"
 
-epts_20_df$decile <- as.numeric(epts_20_df$decile) # Convert decile to numeric
-
-# Plot graph
-epts_20_df_visual <- ggplot(epts_20_df, aes(x = decile, y = count, color = index)) + # Set base
-  geom_point() + # Set points for graph
-  theme_classic() + # Set theme (preference)
-  scale_x_continuous(limits = c(1, 10), breaks = seq(1, 10, by = 1)) + # Set 1 through 10 ticks on x-axis
-  labs(title = "Number of Top 20% EPTS Candidates by Decile", # Set title
+# Create bar graph
+epts_20_df_visual <- ggplot(epts_20_df, aes(x = decile, y = percent, fill = index)) + # Set base
+  geom_col(position = "dodge") + # Columns to be side-by-side
+  labs(title = "Percentage of Top 20% EPTS Score by Decile", # Set title
        subtitle = "Data from SRTR 2024 and EPTS Database", # Set subtitle
        x = "Decile", # Set x-axis label
-       y = "Number of Candidates", # Set y-axis label
-       color = "Index") # Set legend title
+       y = "Percentage", # Set y-axis label
+       fill = "Index") + # Set legend title
+  theme_classic() + # Set theme (preference)
+  scale_y_continuous(limits = c(0, 40), breaks = seq(0, 40, by = 10))
 epts_20_df_visual # view
 
 # Save to PDF
@@ -620,18 +597,80 @@ study_cohort_df$DCI_decile <- relevel(study_cohort_df$DCI_decile, ref = "5")
 
 # Create model
 ## SVM
-ZINB_svm <- zeroinfl(dialysis_time_at_list ~ SVM_decile | preemptive_listing, data = study_cohort_df)
+ZINB_svm <- zeroinfl(dialysis_time_at_list ~ SVM_decile | SVM_decile, data = study_cohort_df, dist = "negbin")
 ZINB_svm
 
 ## SVI
-ZINB_svi <- zeroinfl(dialysis_time_at_list ~ SVI_decile | preemptive_listing, data = study_cohort_df)
+ZINB_svi <- zeroinfl(dialysis_time_at_list ~ SVI_decile | SVI_decile, data = study_cohort_df, , dist = "negbin")
 ZINB_svi
 
 ## SVM
-ZINB_adi <- zeroinfl(dialysis_time_at_list ~ ADI_decile | preemptive_listing, data = study_cohort_df)
+ZINB_adi <- zeroinfl(dialysis_time_at_list ~ ADI_decile | ADI_decile, data = study_cohort_df, dist = "negbin")
 ZINB_adi
 
 ## SVM
-ZINB_dci <- zeroinfl(dialysis_time_at_list ~ DCI_decile | preemptive_listing, data = study_cohort_df)
+ZINB_dci <- zeroinfl(dialysis_time_at_list ~ DCI_decile | DCI_decile, data = study_cohort_df, dist = "negbin")
 ZINB_dci
+```
+
+# ZINB v. Decile plots
+```{r}
+# Create new data frame
+decile <- c(1:4, 6:10)
+
+zinb_df <- data.frame(decile = decile) # Convert to data frame
+zinb_df # view
+
+# Create Coefficient columns
+zinb_df <- zinb_df %>%
+  mutate(
+    SVM_ct = exp(coef(ZINB_svm, model = "count")[-1]), # SVM count
+    SVM_0 = exp(coef(ZINB_svm, model = "zero")[-1]), # SVM zero
+    SVI_ct = exp(coef(ZINB_svi, model = "count")[-1]), # SVI count
+    SVI_0 = exp(coef(ZINB_svi, model = "zero")[-1]), # SVI zero
+    ADI_ct = exp(coef(ZINB_adi, model = "count")[-1]), # ADI count
+    ADI_0 = exp(coef(ZINB_adi, model = "zero")[-1]), # ADI zero
+    DCI_ct = exp(coef(ZINB_dci, model = "count")[-1]), # DCI count
+    DCI_0 = exp(coef(ZINB_dci, model = "zero")[-1]), # DCI zero
+  )
+zinb_df # view
+
+# Insert baseline row
+zinb_df <- zinb_df %>%
+  rbind(data.frame(decile = 5, SVM_ct = 1, SVM_0 = 1, SVI_ct = 1, SVI_0 = 1, ADI_ct = 1, ADI_0 = 1, DCI_ct = 1, DCI_0 = 1))
+
+zinb_df <- zinb_df[order(zinb_df$decile), ] # Put decile column in order
+zinb_df # view
+
+# Rehspae Data Frame
+zinb_df <- zinb_df %>%
+  pivot_longer(cols = c(SVM_ct, SVM_0, SVI_ct, SVI_0, ADI_ct, ADI_0, DCI_ct, DCI_0),
+               names_to = "index",
+               values_to = "coeff") %>%
+  mutate(model = case_when(
+    grepl("_ct$", index) ~ "Dialysis Time at Listing", # If index value ends in ct, set value to count
+    grepl("_0$", index) ~ "Preemptive Listing", # If index value ends in 0, set value to zero
+  ),
+        index_c = case_when(
+          grepl("^ADI_", index) ~ "ADI", # If index begins with ADI, set index_c (for graphing color) to ADI
+          grepl("^SVI_", index) ~ "SVI", # If index begins with SVI, set index_c (for graphing color) to SVI
+          grepl("^SVM_", index) ~ "SVM", # If index begins with SVM, set index_c (for graphing color) to SVM
+          grepl("^DCI_", index) ~ "DCI" # If index begins with DCI, set index_c (for graphing color) to DCI
+        ))
+
+# Create Graph
+zinb_df_visual <- ggplot(zinb_df, aes(x = decile, y = coeff, color = index_c)) + # Set base
+  geom_line() + # Set graphing
+  theme_bw() + # Set theme (preference)
+  facet_wrap(~ model, scales = "free_y", ncol = 1) + # Create grid with different y-axis and stacked
+  labs(title = "Zero-Inflated Negative Binomial Model of Dialysis Time and Preemptive Listing", # Set title
+       subtitle = "Data from SRTR 2024", # Set subtitle
+       x = "Decile", # Set x-axis label
+       y = "Exponentiated Correlation Coefficient", # Set y-axis label
+       color = "Index") + # Set legend title
+  scale_x_continuous(limits = c(1, 10), breaks = seq(1, 10, by = 1)) # Create x-axis to show all 10 numbers
+zinb_df_visual # view
+
+# Save to PDF
+ggsave("/Users/edgaraguila/Desktop/School/Research Projects/UChicago Research/Data/dialysis_time_association Graphs/ZINB Exponentiated Models.pdf", plot = zinb_df_visual, height = 4, units = "in")
 ```
