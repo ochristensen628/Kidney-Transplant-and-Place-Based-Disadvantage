@@ -1,0 +1,534 @@
+---
+title: "Black v. White race by decile for all 4 indices"
+author: "Olivia"
+date: "2024-08-20"
+output: html_document
+---
+
+```{r}
+# Load the .RData file
+load("df_cand_kipa_w_scores_1.RData")
+```
+
+
+```{r}
+library(ggplot2)
+library(dplyr)
+```
+
+```{r}
+df_cand_kipa_w_scores <- df_cand_kipa_w_scores %>%
+  mutate(typeO = ifelse(CAN_ABO == "O", 1, 0))
+```
+
+```{r}
+df_cand_kipa_w_scores <- df_cand_kipa_w_scores %>%
+  mutate(typeO = ifelse(CAN_ABO == "O", 1, 0))
+df_cand_kipa_w_scores <- df_cand_kipa_w_scores %>%
+  mutate(
+    type_O  = case_when(
+      typeO == 1 ~ "Type O Blood",
+      typeO == 0 ~ "Other Blood Type"
+  ))
+```
+
+```{r}
+df_cand_kipa_w_scores$SVM_decile_num <- as.numeric(df_cand_kipa_w_scores$SVM_decile)
+df_cand_kipa_w_scores$SVI_decile_num <- as.numeric(df_cand_kipa_w_scores$SVI_decile)
+df_cand_kipa_w_scores$ADI_decile_num <- as.numeric(df_cand_kipa_w_scores$ADI_decile)
+df_cand_kipa_w_scores$DCI_decile_num <- as.numeric(df_cand_kipa_w_scores$DCI_decile)
+```
+
+
+```{r}
+library(tidyr)
+
+# Summarize counts and percentages for Black and White individuals within each decile
+df_race_summary <- df_cand_kipa_w_scores %>%
+  group_by(SVM_decile_num) %>%
+  filter(!is.na(SVM_decile_num)) %>%
+  dplyr::summarize(
+    black_count = sum(CAN_RACE_SRTR == "BLACK", na.rm = TRUE),
+    white_count = sum(CAN_RACE_SRTR == "WHITE", na.rm = TRUE),
+    total_count = n(),
+    black_pct = black_count / total_count * 100,
+    white_pct = white_count / total_count * 100
+  ) %>%
+  pivot_longer(
+    cols = c(black_pct, white_pct), 
+    names_to = "race", 
+    values_to = "percentage"
+  ) %>%
+  mutate(race = ifelse(race == "black_pct", "Black", "White"))
+
+library(ggplot2)
+
+# Plot the data
+ggplot(df_race_summary, aes(x = as.factor(SVM_decile_num), y = percentage, fill = race)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(
+    x = "SVM Decile",
+    y = "Percentage",
+    title = "Percentage of Black and White Individuals by Decile",
+    fill = "Race"
+  ) +
+  scale_fill_manual(values = c("Black" = "black", "White" = "blue")) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 16),
+    axis.title.x = element_text(size = 14),
+    axis.title.y = element_text(size = 14),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12)
+  )
+
+
+```
+
+```{r}
+
+library(dplyr)
+library(tidyr)
+
+# Summarize counts and percentages for Black and White individuals within each decile
+df_race_summary <- df_cand_kipa_w_scores %>%
+  group_by(SVI_decile_num) %>%
+  filter(!is.na(SVI_decile_num)) %>%
+  dplyr::summarize(
+    black_count = sum(CAN_RACE_SRTR == "BLACK", na.rm = TRUE),
+    white_count = sum(CAN_RACE_SRTR == "WHITE", na.rm = TRUE),
+    total_count = n(),
+    black_pct = black_count / total_count * 100,
+    white_pct = white_count / total_count * 100
+  ) %>%
+  pivot_longer(
+    cols = c(black_pct, white_pct), 
+    names_to = "race", 
+    values_to = "percentage"
+  ) %>%
+  mutate(race = ifelse(race == "black_pct", "Black", "White"))
+
+library(ggplot2)
+
+# Plot the data
+ggplot(df_race_summary, aes(x = as.factor(SVI_decile_num), y = percentage, fill = race)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(
+    x = "SVI Decile",
+    y = "Percentage",
+    title = "Percentage of Black and White Individuals by Decile",
+    fill = "Race"
+  ) +
+  scale_fill_manual(values = c("Black" = "black", "White" = "blue")) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 16),
+    axis.title.x = element_text(size = 14),
+    axis.title.y = element_text(size = 14),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12)
+  )
+
+
+```
+```{r}
+
+library(dplyr)
+library(tidyr)
+
+# Summarize counts and percentages for Black and White individuals within each decile
+df_race_summary <- df_cand_kipa_w_scores %>%
+  group_by(ADI_decile_num) %>%
+  filter(!is.na(SVI_decile_num)) %>%
+  dplyr::summarize(
+    black_count = sum(CAN_RACE_SRTR == "BLACK", na.rm = TRUE),
+    white_count = sum(CAN_RACE_SRTR == "WHITE", na.rm = TRUE),
+    total_count = n(),
+    black_pct = black_count / total_count * 100,
+    white_pct = white_count / total_count * 100
+  ) %>%
+  pivot_longer(
+    cols = c(black_pct, white_pct), 
+    names_to = "race", 
+    values_to = "percentage"
+  ) %>%
+  mutate(race = ifelse(race == "black_pct", "Black", "White"))
+
+library(ggplot2)
+
+# Plot the data
+ggplot(df_race_summary, aes(x = as.factor(ADI_decile_num), y = percentage, fill = race)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(
+    x = "ADI Decile",
+    y = "Percentage",
+    title = "Percentage of Black and White Individuals by Decile",
+    fill = "Race"
+  ) +
+  scale_fill_manual(values = c("Black" = "black", "White" = "blue")) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 16),
+    axis.title.x = element_text(size = 14),
+    axis.title.y = element_text(size = 14),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12)
+  )
+
+
+```
+```{r}
+
+library(dplyr)
+library(tidyr)
+
+# Summarize counts and percentages for Black and White individuals within each decile
+df_race_summary <- df_cand_kipa_w_scores %>%
+  group_by(DCI_decile_num) %>%
+  filter(!is.na(DCI_decile_num)) %>%
+  dplyr::summarize(
+    black_count = sum(CAN_RACE_SRTR == "BLACK", na.rm = TRUE),
+    white_count = sum(CAN_RACE_SRTR == "WHITE", na.rm = TRUE),
+    total_count = n(),
+    black_pct = black_count / total_count * 100,
+    white_pct = white_count / total_count * 100
+  ) %>%
+  pivot_longer(
+    cols = c(black_pct, white_pct), 
+    names_to = "race", 
+    values_to = "percentage"
+  ) %>%
+  mutate(race = ifelse(race == "black_pct", "Black", "White"))
+
+library(ggplot2)
+
+# Plot the data
+ggplot(df_race_summary, aes(x = as.factor(DCI_decile_num), y = percentage, fill = race)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(
+    x = "DCI Decile",
+    y = "Percentage",
+    title = "Percentage of Black and White Individuals by Decile",
+    fill = "Race"
+  ) +
+  scale_fill_manual(values = c("Black" = "black", "White" = "blue")) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 16),
+    axis.title.x = element_text(size = 14),
+    axis.title.y = element_text(size = 14),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12)
+  )
+
+
+```
+
+```{r}
+library(dplyr)
+library(tidyr)
+
+# Summarize counts and percentages for Black and White individuals within SVM decile
+df_race_summary_svm <- df_cand_kipa_w_scores %>%
+  group_by(SVM_decile_num) %>%
+  filter(!is.na(SVM_decile_num)) %>%
+  dplyr::summarize(
+    black_count = sum(CAN_RACE_SRTR == "BLACK", na.rm = TRUE),
+    white_count = sum(CAN_RACE_SRTR == "WHITE", na.rm = TRUE),
+    total_count = n(),
+    black_pct = black_count / total_count * 100,
+    white_pct = white_count / total_count * 100
+  ) %>%
+  pivot_longer(
+    cols = c(black_pct, white_pct), 
+    names_to = "race", 
+    values_to = "percentage"
+  ) %>%
+  mutate(race = ifelse(race == "black_pct", "Black", "White"),
+         decile_type = "SVM")
+
+# Summarize counts and percentages for Black and White individuals within SVI decile
+df_race_summary_svi <- df_cand_kipa_w_scores %>%
+  group_by(SVI_decile_num) %>%
+  filter(!is.na(SVI_decile_num)) %>%
+  dplyr::summarize(
+    black_count = sum(CAN_RACE_SRTR == "BLACK", na.rm = TRUE),
+    white_count = sum(CAN_RACE_SRTR == "WHITE", na.rm = TRUE),
+    total_count = n(),
+    black_pct = black_count / total_count * 100,
+    white_pct = white_count / total_count * 100
+  ) %>%
+  pivot_longer(
+    cols = c(black_pct, white_pct), 
+    names_to = "race", 
+    values_to = "percentage"
+  ) %>%
+  mutate(race = ifelse(race == "black_pct", "Black", "White"),
+         decile_type = "SVI")
+
+# Combine both summaries into one data frame
+df_race_summary_combined <- bind_rows(
+  df_race_summary_svm %>% rename(decile_num = SVM_decile_num),
+  df_race_summary_svi %>% rename(decile_num = SVI_decile_num)
+)
+
+```
+
+
+```{r}
+# Combine all decile summaries into one dataset
+df_combined <- bind_rows(
+  df_cand_kipa_w_scores %>%
+    group_by(SVM_decile_num) %>%
+    filter(!is.na(SVM_decile_num)) %>%
+    dplyr::summarize(
+      black_count = sum(CAN_RACE_SRTR == "BLACK", na.rm = TRUE),
+      white_count = sum(CAN_RACE_SRTR == "WHITE", na.rm = TRUE),
+      total_count = n(),
+      black_pct = black_count / total_count * 100,
+      white_pct = white_count / total_count * 100
+    ) %>%
+    pivot_longer(
+      cols = c(black_pct, white_pct), 
+      names_to = "race", 
+      values_to = "percentage"
+    ) %>%
+    mutate(
+      race = ifelse(race == "black_pct", "Black", "White"),
+      decile_type = "SVM",
+      decile_num = SVM_decile_num
+    ) %>% select(-SVM_decile_num),
+
+  df_cand_kipa_w_scores %>%
+    group_by(SVI_decile_num) %>%
+    filter(!is.na(SVI_decile_num)) %>%
+    dplyr::summarize(
+      black_count = sum(CAN_RACE_SRTR == "BLACK", na.rm = TRUE),
+      white_count = sum(CAN_RACE_SRTR == "WHITE", na.rm = TRUE),
+      total_count = n(),
+      black_pct = black_count / total_count * 100,
+      white_pct = white_count / total_count * 100
+    ) %>%
+    pivot_longer(
+      cols = c(black_pct, white_pct), 
+      names_to = "race", 
+      values_to = "percentage"
+    ) %>%
+    mutate(
+      race = ifelse(race == "black_pct", "Black", "White"),
+      decile_type = "SVI",
+      decile_num = SVI_decile_num
+    ) %>% select(-SVI_decile_num),
+
+  df_cand_kipa_w_scores %>%
+    group_by(ADI_decile_num) %>%
+    filter(!is.na(ADI_decile_num)) %>%
+    dplyr::summarize(
+      black_count = sum(CAN_RACE_SRTR == "BLACK", na.rm = TRUE),
+      white_count = sum(CAN_RACE_SRTR == "WHITE", na.rm = TRUE),
+      total_count = n(),
+      black_pct = black_count / total_count * 100,
+      white_pct = white_count / total_count * 100
+    ) %>%
+    pivot_longer(
+      cols = c(black_pct, white_pct), 
+      names_to = "race", 
+      values_to = "percentage"
+    ) %>%
+    mutate(
+      race = ifelse(race == "black_pct", "Black", "White"),
+      decile_type = "ADI",
+      decile_num = ADI_decile_num
+    ) %>% select(-ADI_decile_num),
+
+  df_cand_kipa_w_scores %>%
+    group_by(DCI_decile_num) %>%
+    filter(!is.na(DCI_decile_num)) %>%
+    dplyr::summarize(
+      black_count = sum(CAN_RACE_SRTR == "BLACK", na.rm = TRUE),
+      white_count = sum(CAN_RACE_SRTR == "WHITE", na.rm = TRUE),
+      total_count = n(),
+      black_pct = black_count / total_count * 100,
+      white_pct = white_count / total_count * 100
+    ) %>%
+    pivot_longer(
+      cols = c(black_pct, white_pct), 
+      names_to = "race", 
+      values_to = "percentage"
+    ) %>%
+    mutate(
+      race = ifelse(race == "black_pct", "Black", "White"),
+      decile_type = "DCI",
+      decile_num = DCI_decile_num
+    ) %>% select(-DCI_decile_num)
+)
+
+# Plot the combined data with facets
+demographics <- ggplot(df_combined, aes(x = as.factor(decile_num), y = percentage, fill = race)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(
+    x = "Decile",
+    y = "Percentage",
+    title = "Percentage of Black and White Individuals by Decile",
+    fill = "Race"
+  ) +
+  scale_fill_manual(values = c("Black" = "black", "White" = "blue")) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 16),
+    axis.title.x = element_text(size = 14),
+    axis.title.y = element_text(size = 14),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12)
+  ) +
+  facet_wrap(~ decile_type, scales = "free_x")
+
+ggsave("white_v_black.png", plot = demographics, height = 4, units = "in")
+```
+```{r}
+# Combine all decile summaries into one dataset
+df_combined <- bind_rows(
+  df_cand_kipa_w_scores %>%
+    group_by(SVM_decile_num) %>%
+    filter(!is.na(SVM_decile_num)) %>%
+    dplyr::summarize(
+      black_count = sum(CAN_RACE_SRTR == "BLACK", na.rm = TRUE),
+      white_count = sum(CAN_RACE_SRTR == "WHITE", na.rm = TRUE),
+      total_count = n(),
+      black_pct = black_count / total_count * 100,
+      white_pct = white_count / total_count * 100
+    ) %>%
+    pivot_longer(
+      cols = c(black_pct, white_pct), 
+      names_to = "race", 
+      values_to = "percentage"
+    ) %>%
+    mutate(
+      race = ifelse(race == "black_pct", "Black", "White"),
+      decile_type = "SVM",
+      decile_num = SVM_decile_num
+    ) %>% select(-SVM_decile_num),
+
+  df_cand_kipa_w_scores %>%
+    group_by(SVI_decile_num) %>%
+    filter(!is.na(SVI_decile_num)) %>%
+    dplyr::summarize(
+      black_count = sum(CAN_RACE_SRTR == "BLACK", na.rm = TRUE),
+      white_count = sum(CAN_RACE_SRTR == "WHITE", na.rm = TRUE),
+      total_count = n(),
+      black_pct = black_count / total_count * 100,
+      white_pct = white_count / total_count * 100
+    ) %>%
+    pivot_longer(
+      cols = c(black_pct, white_pct), 
+      names_to = "race", 
+      values_to = "percentage"
+    ) %>%
+    mutate(
+      race = ifelse(race == "black_pct", "Black", "White"),
+      decile_type = "SVI",
+      decile_num = SVI_decile_num
+    ) %>% select(-SVI_decile_num),
+
+  df_cand_kipa_w_scores %>%
+    group_by(ADI_decile_num) %>%
+    filter(!is.na(ADI_decile_num)) %>%
+    dplyr::summarize(
+      black_count = sum(CAN_RACE_SRTR == "BLACK", na.rm = TRUE),
+      white_count = sum(CAN_RACE_SRTR == "WHITE", na.rm = TRUE),
+      total_count = n(),
+      black_pct = black_count / total_count * 100,
+      white_pct = white_count / total_count * 100
+    ) %>%
+    pivot_longer(
+      cols = c(black_pct, white_pct), 
+      names_to = "race", 
+      values_to = "percentage"
+    ) %>%
+    mutate(
+      race = ifelse(race == "black_pct", "Black", "White"),
+      decile_type = "ADI",
+      decile_num = ADI_decile_num
+    ) %>% select(-ADI_decile_num),
+
+  df_cand_kipa_w_scores %>%
+    group_by(DCI_decile_num) %>%
+    filter(!is.na(DCI_decile_num)) %>%
+    dplyr::summarize(
+      black_count = sum(CAN_RACE_SRTR == "BLACK", na.rm = TRUE),
+      white_count = sum(CAN_RACE_SRTR == "WHITE", na.rm = TRUE),
+      total_count = n(),
+      black_pct = black_count / total_count * 100,
+      white_pct = white_count / total_count * 100
+    ) %>%
+    pivot_longer(
+      cols = c(black_pct, white_pct), 
+      names_to = "race", 
+      values_to = "percentage"
+    ) %>%
+    mutate(
+      race = ifelse(race == "black_pct", "Black", "White"),
+      decile_type = "DCI",
+      decile_num = DCI_decile_num
+    ) %>% select(-DCI_decile_num)
+)
+
+# Plot the data with facets for each decile type
+ggplot(df_combined, aes(x = as.factor(decile_num), y = percentage, fill = race)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(
+    x = "Decile",
+    y = "Percentage",
+    title = "Percentage of Black and White Individuals by Decile",
+    fill = "Race"
+  ) +
+  scale_fill_manual(values = c("Black" = "black", "White" = "blue")) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 16),
+    axis.title.x = element_text(size = 14),
+    axis.title.y = element_text(size = 14),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12)
+  ) +
+  facet_wrap(~ decile_type, scales = "free_x")
+
+```
+```{r}
+# Plot the data with stacked bars for each decile type
+ggplot(df_combined, aes(x = as.factor(decile_num), y = percentage, fill = race)) +
+  geom_bar(stat = "identity") +
+  labs(
+    x = "Decile",
+    y = "Percentage",
+    title = "Percentage of Black and White Individuals by Decile",
+    fill = "Race"
+  ) +
+  scale_fill_manual(values = c("Black" = "black", "White" = "blue")) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 16),
+    axis.title.x = element_text(size = 14),
+    axis.title.y = element_text(size = 14),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12)
+  ) +
+  facet_wrap(~ decile_type, scales = "free_x")
+
+```
+
+
