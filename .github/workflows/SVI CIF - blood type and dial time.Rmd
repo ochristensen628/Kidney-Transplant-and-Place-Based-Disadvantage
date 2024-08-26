@@ -1,0 +1,1017 @@
+---
+title: "SVI CIF"
+author: "Olivia"
+date: "2024-08-14"
+output: html_document
+---
+
+```{r}
+load("df_cand_kipa_w_scores_1.RData")
+```
+
+
+```{r eval=FALSE, include=FALSE}
+df_cand_kipa_w_scores <- read.csv("df_cand_kipa_w_scores.csv")
+```
+
+```{r}
+df_cand_kipa_w_scores$SVM_decile_num <- as.numeric(df_cand_kipa_w_scores$SVM_decile)
+df_cand_kipa_w_scores$SVI_decile_num <- as.numeric(df_cand_kipa_w_scores$SVI_decile)
+df_cand_kipa_w_scores$ADI_decile_num <- as.numeric(df_cand_kipa_w_scores$ADI_decile)
+df_cand_kipa_w_scores$DCI_decile_num <- as.numeric(df_cand_kipa_w_scores$DCI_decile)
+```
+
+```{r}
+df_cand_kipa_w_scores <- df_cand_kipa_w_scores %>%
+  mutate(typeO = ifelse(CAN_ABO == "O", 1, 0))
+df_cand_kipa_w_scores <- df_cand_kipa_w_scores %>%
+  mutate(
+    type_O  = case_when(
+      typeO == 1 ~ "Type O Blood",
+      typeO == 0 ~ "Other Blood Type"
+  ))
+```
+
+
+
+SVI - Transplant as outcome
+
+
+```{r}
+df_cif_transplant_SVI <- df_cand_kipa_w_scores %>%
+  mutate(time = as.numeric(survival_time),  # Ensure time is numeric
+         event = as.numeric(transplant_outcome)) %>%
+  filter(!is.na(time) & !is.na(event)) %>%
+  select(PX_ID, death_outcome, time, event, SVI_decile_num, typeO)
+```
+
+Filter to 1st and 10th decile
+```{r}
+df_cif_transplant_SVI <- df_cif_transplant_SVI %>% filter(!is.na(SVI_decile_num))
+df_cif_transplant_SVI = df_cif_transplant_SVI %>% filter(SVI_decile_num %in% c(1,10))
+```
+
+```{r}
+library(tidycmprsk)
+library(ggplot2)
+library(dplyr)
+library(ggsurvfit)
+```
+
+
+```{r}
+library(tidycmprsk)
+# Plot cuminc of transplant
+cif_transplant_SVI <-
+tidycmprsk::cuminc(Surv(time = time, event = as.factor(event)) ~ SVI_decile_num + typeO, data = df_cif_transplant_SVI) %>%
+  ggcuminc() +
+  labs(
+    x = "Days",
+    y = "Cumulative Incidence of Transplant",
+    title = "Incidence of Transplant by SVI - all dial_times",
+    color = "SVI Decile"
+    )+
+  scale_ggsurvfit()+
+  scale_x_continuous(limits =c(0,1800)) +
+  theme_minimal()+
+  guides(fill = "none", color = guide_legend(override.aes = list(linetype = 1)))
+cif_transplant_SVI
+```
+
+SVI - Transplant as outcome - Preemptive
+
+```{r}
+df_cif_transplant_SVI <- df_cand_kipa_w_scores %>%
+  mutate(time = as.numeric(survival_time),  # Ensure time is numeric
+         event = as.numeric(transplant_outcome)) %>%
+  filter(!is.na(time) & !is.na(event)) %>%
+  filter(is.na(dial_time)) %>%
+  select(PX_ID, death_outcome, time, event, SVI_decile_num, typeO)
+```
+
+Filter to 1st and 10th decile
+```{r}
+df_cif_transplant_SVI <- df_cif_transplant_SVI %>% filter(!is.na(SVI_decile_num))
+df_cif_transplant_SVI = df_cif_transplant_SVI %>% filter(SVI_decile_num %in% c(1,10))
+df_cif_transplant_SVI <- df_cif_transplant_SVI %>% 
+  mutate(
+    SVI_decile_test = case_when(
+      SVI_decile_num == 1 ~ "Decile 1",
+      SVI_decile_num == 10 ~ "Decile 10"
+    ))
+
+df_cif_transplant_SVI <- df_cif_transplant_SVI %>%
+  mutate(
+    type_O  = case_when(
+      typeO == 1 ~ "Type O Blood",
+      typeO == 0 ~ "Other Blood Type"
+  ))
+```
+
+```{r}
+cif_transplant_SVI_preemp <-
+tidycmprsk::cuminc(Surv(time = time, event = as.factor(event)) ~ SVI_decile_test + type_O, data = df_cif_transplant_SVI)
+cif_transplant_SVI_preemp
+```
+
+
+```{r}
+# Plot cuminc of transplant
+cif_transplant_SVI_preemp <-
+tidycmprsk::cuminc(Surv(time = time, event = as.factor(event)) ~ SVI_decile_test + type_O, data = df_cif_transplant_SVI) %>%
+  ggcuminc()+
+  labs(
+    x = "Days on Waitlist",
+    y = "Cumulative Incidence of Deceased Donor Transplant",
+    title = "Incidence of Transplant by SVI for Preemptively Listed Patients",
+    color = "SVI Decile, Blood Type"
+    )+
+  scale_ggsurvfit()+
+  scale_x_continuous(limits =c(0,1826)) +
+  theme_minimal()+
+    theme(
+    # Increase font size for titles
+    plot.title = element_text(size = 16),
+    # Increase font size for axis labels
+    axis.title.x = element_text(size = 14),
+    axis.title.y = element_text(size = 14),
+    # Increase font size for axis text
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    # Increase font size for legend
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12)
+  ) +
+  guides(fill = "none", color = guide_legend(override.aes = list(linetype = 1)))
+cif_transplant_SVI_preemp
+```
+SVI - Transplant as outcome - Preemptive
+```{r}
+df_cif_transplant_SVI <- df_cand_kipa_w_scores %>%
+  mutate(time = as.numeric(survival_time),  # Ensure time is numeric
+         event = as.numeric(transplant_outcome)) %>%
+  filter(!is.na(time) & !is.na(event)) %>%
+  filter(is.na(dial_time)) %>%
+  select(PX_ID, death_outcome, time, event, SVI_decile_num, typeO)
+
+df_cif_transplant_SVI <- df_cif_transplant_SVI %>%
+  filter(
+    typeO == 1 & 
+    (SVI_decile_num == 1 | SVI_decile_num == 10)
+  )
+
+
+```
+
+Filter to 1st and 10th decile
+```{r}
+df_cif_transplant_SVI <- df_cif_transplant_SVI %>% filter(!is.na(SVI_decile_num))
+df_cif_transplant_SVI = df_cif_transplant_SVI %>% filter(SVI_decile_num %in% c(1,10))
+```
+
+```{r}
+cif_transplant_SVI_preemp <-
+tidycmprsk::cuminc(Surv(time = time, event = as.factor(event)) ~ SVI_decile_num + typeO, data = df_cif_transplant_SVI)
+cif_transplant_SVI_preemp
+```
+
+
+
+```{r}
+library(gridExtra)
+ggsave("SVI_decile_blood_preemp.png", plot = cif_transplant_SVI_preemp, width = 10, height = 5, dpi = 300)
+```
+
+```{r}
+df_cif_transplant <- df_cand_kipa_w_scores %>%
+  mutate(time = as.numeric(survival_time),  # Ensure time is numeric
+         event = as.numeric(transplant_outcome)) %>%
+  filter(!is.na(time) & !is.na(event)) %>%
+  filter(is.na(dial_time)) %>%
+  select(PX_ID, transplant_outcome, time, event, SVI_decile_num, dial_time, typeO)
+
+# Convert dial_time to numeric
+df_cif_transplant <- df_cif_transplant %>%
+  mutate(dial_time = as.numeric(dial_time))
+```
+
+Filter to 1st and 10th decile
+```{r}
+df_cif_transplant <- df_cif_transplant %>% filter(!is.na(SVI_decile_num))
+df_cif_transplant = df_cif_transplant %>% filter(SVI_decile_num %in% c(1,10))
+```
+
+```{r}
+cif_transplant_SVI_year <-
+tidycmprsk::cuminc(Surv(time = time, event = as.factor(event)) ~ SVI_decile_num + typeO, data = df_cif_transplant_SVI)
+cif_transplant_SVI_year
+```
+
+
+```{r}
+# Plot cuminc of transplant
+cif_transplant_SVI_year <-
+tidycmprsk::cuminc(Surv(time = time, event = as.factor(event)) ~ SVI_decile_num + typeO, data = df_cif_transplant_SVI) %>%
+  ggcuminc()+
+  labs(
+    x = "Days",
+    y = "Cumulative Incidence of Transplant",
+    title = "Incidence of Transplant by SVI - preemptive + blood type",
+    color = "SVI Decile"
+    )+
+  scale_ggsurvfit()+
+  scale_x_continuous(limits =c(0,1800)) +
+  theme_minimal()+
+  guides(fill = "none", color = guide_legend(override.aes = list(linetype = 1)))
+cif_transplant_SVI_year
+```
+
+SVI - Transplant as outcome
+```{r}
+df_cif_transplant <- df_cand_kipa_w_scores %>%
+  mutate(time = as.numeric(survival_time),  # Ensure time is numeric
+         event = as.numeric(transplant_outcome)) %>%
+  filter(!is.na(time) & !is.na(event)) %>%
+  filter(!is.na(dial_time)) %>%
+  select(PX_ID, transplant_outcome, time, event, SVI_decile_num, dial_time, typeO)
+
+# Convert dial_time to numeric
+df_cif_transplant <- df_cif_transplant %>%
+  mutate(dial_time = as.numeric(dial_time))
+```
+
+Filter to 1st and 10th decile
+```{r}
+df_cif_transplant <- df_cif_transplant %>% filter(!is.na(SVI_decile_num))
+df_cif_transplant = df_cif_transplant %>% filter(SVI_decile_num %in% c(1,10))
+```
+
+```{r}
+# Adjust breaks if the range is very small or has few unique values
+max_dial_time <- max(df_cif_transplant$dial_time, na.rm = TRUE)
+min_dial_time <- min(df_cif_transplant$dial_time, na.rm = TRUE)
+
+# Ensure breaks do not exceed the range
+if (max_dial_time > min_dial_time) {
+  breaks <- seq(min_dial_time, max_dial_time, by = 365)
+} else {
+  breaks <- c(min_dial_time, max_dial_time)
+}
+
+# Create bins with adjusted breaks
+df_cif_transplant <- df_cif_transplant %>%
+  mutate(dial_time_bin = cut(dial_time, breaks = breaks, include.lowest = TRUE))
+
+df_cif_transplant_bin1 <- df_cif_transplant %>% 
+  filter(dial_time_bin == "[0,365]")
+```
+
+```{r}
+cif_transplant_SVI_year <-
+tidycmprsk::cuminc(Surv(time = time, event = as.factor(event)) ~ SVI_decile_num + dial_time_bin + typeO, data = df_cif_transplant_bin1) 
+cif_transplant_SVI_year
+```
+
+
+```{r}
+library(cmprsk)
+# Plot cuminc of transplant
+cif_transplant_SVI_year <-
+tidycmprsk::cuminc(Surv(time = time, event = as.factor(event)) ~ SVI_decile_num + dial_time_bin + typeO, data = df_cif_transplant_bin1) %>%
+  ggcuminc()+
+  labs(
+    x = "Days",
+    y = "Cumulative Incidence of Transplant",
+    title = "Incidence of Transplant by SVI - dial_time < 1 yr + blood type",
+    color = "SVI Decile"
+    )+
+  scale_ggsurvfit()+
+  scale_x_continuous(limits =c(0,1800)) +
+  theme_minimal()+
+  guides(fill = "none", color = guide_legend(override.aes = list(linetype = 1)))
+cif_transplant_SVI_year
+```
+
+SVI - Transplant as outcome
+```{r}
+df_cif_transplant <- df_cand_kipa_w_scores %>%
+  mutate(time = as.numeric(survival_time),  # Ensure time is numeric
+         event = as.numeric(transplant_outcome)) %>%
+  filter(!is.na(time) & !is.na(event)) %>%
+  filter(!is.na(dial_time)) %>%
+  select(PX_ID, transplant_outcome, time, event, SVI_decile_num, dial_time, typeO)
+
+# Convert dial_time to numeric
+df_cif_transplant <- df_cif_transplant %>%
+  mutate(dial_time = as.numeric(dial_time))
+```
+
+Filter to 1st and 10th decile
+```{r}
+df_cif_transplant <- df_cif_transplant %>% filter(!is.na(SVI_decile_num))
+df_cif_transplant = df_cif_transplant %>% filter(SVI_decile_num %in% c(1,10))
+```
+
+```{r}
+# Adjust breaks if the range is very small or has few unique values
+max_dial_time <- max(df_cif_transplant$dial_time, na.rm = TRUE)
+min_dial_time <- min(df_cif_transplant$dial_time, na.rm = TRUE)
+
+# Ensure breaks do not exceed the range
+if (max_dial_time > min_dial_time) {
+  breaks <- seq(min_dial_time, max_dial_time, by = 365)
+} else {
+  breaks <- c(min_dial_time, max_dial_time)
+}
+
+# Create bins with adjusted breaks
+df_cif_transplant <- df_cif_transplant %>%
+  mutate(dial_time_bin = cut(dial_time, breaks = breaks, include.lowest = TRUE))
+
+df_cif_transplant_bin1 <- df_cif_transplant %>% 
+  filter(dial_time_bin == "(365,730]")
+```
+
+```{r}
+# Plot cuminc of transplant
+cif_transplant_SVI_2yrs <-
+tidycmprsk::cuminc(Surv(time = time, event = as.factor(event)) ~ SVI_decile_num + dial_time_bin + typeO, data = df_cif_transplant_bin1) %>%
+  ggcuminc()+
+  labs(
+    x = "Days",
+    y = "Cumulative Incidence of Transplant",
+    title = "Incidence of Transplant by SVI - dial_time 1-2 yrs + blood type",
+    color = "SVI Decile"
+    )+
+  scale_ggsurvfit()+
+  scale_x_continuous(limits =c(0,1800)) +
+  theme_minimal()+
+  guides(fill = "none", color = guide_legend(override.aes = list(linetype = 1)))
+cif_transplant_SVI_2yrs
+```
+
+SVI - Transplant as outcome
+```{r}
+df_cif_transplant <- df_cand_kipa_w_scores %>%
+  mutate(time = as.numeric(survival_time),  # Ensure time is numeric
+         event = as.numeric(transplant_outcome)) %>%
+  filter(!is.na(time) & !is.na(event)) %>%
+  filter(!is.na(dial_time)) %>%
+  select(PX_ID, transplant_outcome, time, event, SVI_decile_num, dial_time, typeO)
+
+# Convert dial_time to numeric
+df_cif_transplant <- df_cif_transplant %>%
+  mutate(dial_time = as.numeric(dial_time))
+```
+
+Filter to 1st and 10th decile
+```{r}
+df_cif_transplant <- df_cif_transplant %>% filter(!is.na(SVI_decile_num))
+df_cif_transplant = df_cif_transplant %>% filter(SVI_decile_num %in% c(1,10))
+```
+
+```{r}
+# Adjust breaks if the range is very small or has few unique values
+max_dial_time <- max(df_cif_transplant$dial_time, na.rm = TRUE)
+min_dial_time <- min(df_cif_transplant$dial_time, na.rm = TRUE)
+
+# Ensure breaks do not exceed the range
+if (max_dial_time > min_dial_time) {
+  breaks <- seq(min_dial_time, max_dial_time, by = 365)
+} else {
+  breaks <- c(min_dial_time, max_dial_time)
+}
+
+# Create bins with adjusted breaks
+df_cif_transplant <- df_cif_transplant %>%
+  mutate(dial_time_bin = cut(dial_time, breaks = breaks, include.lowest = TRUE))
+
+df_cif_transplant_bin1 <- df_cif_transplant %>% 
+  filter(dial_time_bin == "(730,1.09e+03]")
+```
+
+```{r}
+# Plot cuminc of transplant
+cif_transplant_SVI_3yrs <-
+tidycmprsk::cuminc(Surv(time = time, event = as.factor(event)) ~ SVI_decile_num + dial_time_bin + typeO, data = df_cif_transplant_bin1) %>%
+  ggcuminc()+
+  labs(
+    x = "Days",
+    y = "Cumulative Incidence of Transplant",
+    title = "Incidence of Transplant by SVI - dial_time 2-3 yrs + blood type",
+    color = "SVI Decile"
+    )+
+  scale_ggsurvfit()+
+  scale_x_continuous(limits =c(0,1800)) +
+  theme_minimal()+
+  guides(fill = "none", color = guide_legend(override.aes = list(linetype = 1)))
+cif_transplant_SVI_3yrs
+```
+
+SVI - Transplant as outcome
+```{r}
+df_cif_transplant <- df_cand_kipa_w_scores %>%
+  mutate(time = as.numeric(survival_time),  # Ensure time is numeric
+         event = as.numeric(transplant_outcome)) %>%
+  filter(!is.na(time) & !is.na(event)) %>%
+  filter(!is.na(dial_time)) %>%
+  select(PX_ID, transplant_outcome, time, event, SVI_decile_num, dial_time, typeO)
+
+# Convert dial_time to numeric
+df_cif_transplant <- df_cif_transplant %>%
+  mutate(dial_time = as.numeric(dial_time))
+```
+
+Filter to 1st and 10th decile
+```{r}
+df_cif_transplant <- df_cif_transplant %>% filter(!is.na(SVI_decile_num))
+df_cif_transplant = df_cif_transplant %>% filter(SVI_decile_num %in% c(1,10))
+```
+
+```{r}
+# Adjust breaks if the range is very small or has few unique values
+max_dial_time <- max(df_cif_transplant$dial_time, na.rm = TRUE)
+min_dial_time <- min(df_cif_transplant$dial_time, na.rm = TRUE)
+
+# Ensure breaks do not exceed the range
+if (max_dial_time > min_dial_time) {
+  breaks <- seq(min_dial_time, max_dial_time, by = 365)
+} else {
+  breaks <- c(min_dial_time, max_dial_time)
+}
+
+# Create bins with adjusted breaks
+df_cif_transplant <- df_cif_transplant %>%
+  mutate(dial_time_bin = cut(dial_time, breaks = breaks, include.lowest = TRUE))
+
+df_cif_transplant_bin1 <- df_cif_transplant %>% 
+  filter(dial_time_bin == "(1.09e+03,1.46e+03]")
+```
+
+```{r}
+# Plot cuminc of transplant
+cif_transplant_SVI_4yrs <-
+tidycmprsk::cuminc(Surv(time = time, event = as.factor(event)) ~ SVI_decile_num + dial_time_bin + typeO, data = df_cif_transplant_bin1) %>%
+  ggcuminc()+
+  labs(
+    x = "Days",
+    y = "Cumulative Incidence of Transplant",
+    title = "Incidence of Transplant by SVI - dial_time 3-4 yrs + blood type",
+    color = "SVI Decile"
+    )+
+  scale_ggsurvfit()+
+  scale_x_continuous(limits =c(0,1800)) +
+  theme_minimal()+
+  guides(fill = "none", color = guide_legend(override.aes = list(linetype = 1)))
+cif_transplant_SVI_4yrs
+```
+
+SVI - Transplant as outcome - Preemptive
+```{r}
+df_cif_transplant_SVI <- df_cand_kipa_w_scores %>%
+  mutate(time = as.numeric(survival_time),  # Ensure time is numeric
+         event = as.numeric(transplant_outcome)) %>%
+  filter(!is.na(time) & !is.na(event)) %>%
+  filter(is.na(dial_time)) %>%
+  select(PX_ID, death_outcome, time, event, SVI_decile_num, typeO)
+```
+
+Filter to 1st and 10th decile
+```{r}
+df_cif_transplant_SVI <- df_cif_transplant_SVI %>% filter(!is.na(SVI_decile_num))
+df_cif_transplant_SVI = df_cif_transplant_SVI %>% filter(SVI_decile_num %in% c(1,10))
+```
+
+```{r}
+# Plot cuminc of transplant
+cif_transplant_SVI_preemp_noblood <-
+tidycmprsk::cuminc(Surv(time = time, event = as.factor(event)) ~ SVI_decile_num, data = df_cif_transplant_SVI) %>%
+  ggcuminc()+
+  labs(
+    x = "Days",
+    y = "Cumulative Incidence of Transplant",
+    title = "Incidence of Transplant by SVI - Preemptive",
+    color = "SVI Decile"
+    )+
+  scale_ggsurvfit()+
+  scale_x_continuous(limits =c(0,1800)) +
+  theme_minimal()+
+  guides(fill = "none", color = guide_legend(override.aes = list(linetype = 1)))
+cif_transplant_SVI_preemp_noblood
+```
+
+```{r}
+library(gridExtra)
+
+SVI_dial_blood <- grid.arrange(cif_transplant_SVI, cif_transplant_SVI_preemp, cif_transplant_SVI_year, cif_transplant_SVI_2yrs, cif_transplant_SVI_3yrs, cif_transplant_SVI_4yrs, ncol = 2, nrow = 4)
+```
+
+```{r}
+ggsave("SVI_dial_blood.png", plot = SVI_dial_blood, width = 20, height = 10, dpi = 300)
+```
+
+
+SVI - Transplant as outcome
+```{r}
+df_cif_transplant_SVI <- df_cand_kipa_w_scores %>%
+  mutate(time = as.numeric(survival_time),  # Ensure time is numeric
+         event = as.numeric(transplant_outcome)) %>%
+  filter(!is.na(time) & !is.na(event)) %>%
+  select(PX_ID, death_outcome, time, event, SVI_decile_num, typeO)
+```
+
+Filter to 1st and 10th decile
+```{r}
+df_cif_transplant_SVI <- df_cif_transplant_SVI %>% filter(!is.na(SVI_decile_num))
+df_cif_transplant_SVI = df_cif_transplant_SVI %>% filter(SVI_decile_num %in% c(1,10))
+```
+
+```{r}
+# Plot cuminc of transplant
+cif_transplant_SVI_nb <-
+tidycmprsk::cuminc(Surv(time = time, event = as.factor(event)) ~ SVI_decile_num, data = df_cif_transplant_SVI) %>%
+  ggcuminc()+
+  labs(
+    x = "Days",
+    y = "Cumulative Incidence of Transplant",
+    title = "Incidence of Transplant by SVI - all dial_times",
+    color = "SVI Decile"
+    )+
+  scale_ggsurvfit()+
+  scale_x_continuous(limits =c(0,1800)) +
+  theme_minimal()+
+  guides(fill = "none", color = guide_legend(override.aes = list(linetype = 1)))
+cif_transplant_SVI_nb
+```
+
+SVI - Transplant as outcome - Preemptive
+```{r}
+df_cif_transplant_SVI <- df_cand_kipa_w_scores %>%
+  mutate(time = as.numeric(survival_time),  # Ensure time is numeric
+         event = as.numeric(transplant_outcome)) %>%
+  filter(!is.na(time) & !is.na(event)) %>%
+  filter(is.na(dial_time)) %>%
+  select(PX_ID, death_outcome, time, event, SVI_decile_num, typeO)
+```
+
+Filter to 1st and 10th decile
+```{r}
+df_cif_transplant_SVI <- df_cif_transplant_SVI %>% filter(!is.na(SVI_decile_num))
+df_cif_transplant_SVI = df_cif_transplant_SVI %>% filter(SVI_decile_num %in% c(1,10))
+```
+
+```{r}
+# Plot cuminc of transplant
+cif_transplant_SVI_preemp_nb <-
+tidycmprsk::cuminc(Surv(time = time, event = as.factor(event)) ~ SVI_decile_num, data = df_cif_transplant_SVI) %>%
+  ggcuminc()+
+  labs(
+    x = "Days",
+    y = "Cumulative Incidence of Transplant",
+    title = "Incidence of Transplant by SVI - Preemptive",
+    color = "SVI Decile"
+    )+
+  scale_ggsurvfit()+
+  scale_x_continuous(limits =c(0,1800)) +
+  theme_minimal()+
+  guides(fill = "none", color = guide_legend(override.aes = list(linetype = 1)))
+cif_transplant_SVI_preemp_nb
+```
+
+SVI - Transplant as outcome
+```{r}
+df_cif_transplant <- df_cand_kipa_w_scores %>%
+  mutate(time = as.numeric(survival_time),  # Ensure time is numeric
+         event = as.numeric(transplant_outcome)) %>%
+  filter(!is.na(time) & !is.na(event)) %>%
+  filter(!is.na(dial_time)) %>%
+  select(PX_ID, transplant_outcome, time, event, SVI_decile_num, dial_time, typeO)
+
+# Convert dial_time to numeric
+df_cif_transplant <- df_cif_transplant %>%
+  mutate(dial_time = as.numeric(dial_time))
+```
+
+Filter to 1st and 10th decile
+```{r}
+df_cif_transplant <- df_cif_transplant %>% filter(!is.na(SVI_decile_num))
+df_cif_transplant = df_cif_transplant %>% filter(SVI_decile_num %in% c(1,10))
+```
+
+```{r}
+# Adjust breaks if the range is very small or has few unique values
+max_dial_time <- max(df_cif_transplant$dial_time, na.rm = TRUE)
+min_dial_time <- min(df_cif_transplant$dial_time, na.rm = TRUE)
+
+# Ensure breaks do not exceed the range
+if (max_dial_time > min_dial_time) {
+  breaks <- seq(min_dial_time, max_dial_time, by = 365)
+} else {
+  breaks <- c(min_dial_time, max_dial_time)
+}
+
+# Create bins with adjusted breaks
+df_cif_transplant <- df_cif_transplant %>%
+  mutate(dial_time_bin = cut(dial_time, breaks = breaks, include.lowest = TRUE))
+
+df_cif_transplant_bin1 <- df_cif_transplant %>% 
+  filter(dial_time_bin == "[0,365]")
+```
+
+```{r}
+# Plot cuminc of transplant
+cif_transplant_SVI_year_nb <-
+tidycmprsk::cuminc(Surv(time = time, event = as.factor(event)) ~ SVI_decile_num + dial_time_bin, data = df_cif_transplant_bin1) %>%
+  ggcuminc()+
+  labs(
+    x = "Days",
+    y = "Cumulative Incidence of Transplant",
+    title = "Incidence of Transplant by SVI - dial_time < 1 yr",
+    color = "SVI Decile"
+    )+
+  scale_ggsurvfit()+
+  scale_x_continuous(limits =c(0,1800)) +
+  theme_minimal()+
+  guides(fill = "none", color = guide_legend(override.aes = list(linetype = 1)))
+cif_transplant_SVI_year_nb
+```
+
+SVI - Transplant as outcome
+```{r}
+df_cif_transplant <- df_cand_kipa_w_scores %>%
+  mutate(time = as.numeric(survival_time),  # Ensure time is numeric
+         event = as.numeric(transplant_outcome)) %>%
+  filter(!is.na(time) & !is.na(event)) %>%
+  filter(!is.na(dial_time)) %>%
+  select(PX_ID, transplant_outcome, time, event, SVI_decile_num, dial_time, typeO)
+
+# Convert dial_time to numeric
+df_cif_transplant <- df_cif_transplant %>%
+  mutate(dial_time = as.numeric(dial_time))
+```
+
+Filter to 1st and 10th decile
+```{r}
+df_cif_transplant <- df_cif_transplant %>% filter(!is.na(SVI_decile_num))
+df_cif_transplant = df_cif_transplant %>% filter(SVI_decile_num %in% c(1,10))
+```
+
+```{r}
+# Adjust breaks if the range is very small or has few unique values
+max_dial_time <- max(df_cif_transplant$dial_time, na.rm = TRUE)
+min_dial_time <- min(df_cif_transplant$dial_time, na.rm = TRUE)
+
+# Ensure breaks do not exceed the range
+if (max_dial_time > min_dial_time) {
+  breaks <- seq(min_dial_time, max_dial_time, by = 365)
+} else {
+  breaks <- c(min_dial_time, max_dial_time)
+}
+
+# Create bins with adjusted breaks
+df_cif_transplant <- df_cif_transplant %>%
+  mutate(dial_time_bin = cut(dial_time, breaks = breaks, include.lowest = TRUE))
+
+df_cif_transplant_bin1 <- df_cif_transplant %>% 
+  filter(dial_time_bin == "(365,730]")
+```
+
+```{r}
+# Plot cuminc of transplant
+cif_transplant_SVI_2yrs_nb <-
+tidycmprsk::cuminc(Surv(time = time, event = as.factor(event)) ~ SVI_decile_num + dial_time_bin, data = df_cif_transplant_bin1) %>%
+  ggcuminc()+
+  labs(
+    x = "Days",
+    y = "Cumulative Incidence of Transplant",
+    title = "Incidence of Transplant by SVI - dial_time 1-2 yrs",
+    color = "SVI Decile"
+    )+
+  scale_ggsurvfit()+
+  scale_x_continuous(limits =c(0,1800)) +
+  theme_minimal()+
+  guides(fill = "none", color = guide_legend(override.aes = list(linetype = 1)))
+cif_transplant_SVI_2yrs_nb
+```
+
+SVI - Transplant as outcome
+```{r}
+df_cif_transplant <- df_cand_kipa_w_scores %>%
+  mutate(time = as.numeric(survival_time),  # Ensure time is numeric
+         event = as.numeric(transplant_outcome)) %>%
+  filter(!is.na(time) & !is.na(event)) %>%
+  filter(!is.na(dial_time)) %>%
+  select(PX_ID, transplant_outcome, time, event, SVI_decile_num, dial_time, typeO)
+
+# Convert dial_time to numeric
+df_cif_transplant <- df_cif_transplant %>%
+  mutate(dial_time = as.numeric(dial_time))
+```
+
+Filter to 1st and 10th decile
+```{r}
+df_cif_transplant <- df_cif_transplant %>% filter(!is.na(SVI_decile_num))
+df_cif_transplant = df_cif_transplant %>% filter(SVI_decile_num %in% c(1,10))
+```
+
+```{r}
+# Adjust breaks if the range is very small or has few unique values
+max_dial_time <- max(df_cif_transplant$dial_time, na.rm = TRUE)
+min_dial_time <- min(df_cif_transplant$dial_time, na.rm = TRUE)
+
+# Ensure breaks do not exceed the range
+if (max_dial_time > min_dial_time) {
+  breaks <- seq(min_dial_time, max_dial_time, by = 365)
+} else {
+  breaks <- c(min_dial_time, max_dial_time)
+}
+
+# Create bins with adjusted breaks
+df_cif_transplant <- df_cif_transplant %>%
+  mutate(dial_time_bin = cut(dial_time, breaks = breaks, include.lowest = TRUE))
+
+df_cif_transplant_bin1 <- df_cif_transplant %>% 
+  filter(dial_time_bin == "(730,1.09e+03]")
+```
+
+```{r}
+# Plot cuminc of transplant
+cif_transplant_SVI_3yrs_nb <-
+tidycmprsk::cuminc(Surv(time = time, event = as.factor(event)) ~ SVI_decile_num + dial_time_bin, data = df_cif_transplant_bin1) %>%
+  ggcuminc()+
+  labs(
+    x = "Days",
+    y = "Cumulative Incidence of Transplant",
+    title = "Incidence of Transplant by SVI - dial_time 2-3 yrs",
+    color = "SVI Decile"
+    )+
+  scale_ggsurvfit()+
+  scale_x_continuous(limits =c(0,1800)) +
+  theme_minimal()+
+  guides(fill = "none", color = guide_legend(override.aes = list(linetype = 1)))
+cif_transplant_SVI_3yrs_nb
+```
+
+SVI - Transplant as outcome
+```{r}
+df_cif_transplant <- df_cand_kipa_w_scores %>%
+  mutate(time = as.numeric(survival_time),  # Ensure time is numeric
+         event = as.numeric(transplant_outcome)) %>%
+  filter(!is.na(time) & !is.na(event)) %>%
+  filter(!is.na(dial_time)) %>%
+  select(PX_ID, transplant_outcome, time, event, SVI_decile_num, dial_time, typeO)
+
+# Convert dial_time to numeric
+df_cif_transplant <- df_cif_transplant %>%
+  mutate(dial_time = as.numeric(dial_time))
+```
+
+Filter to 1st and 10th decile
+```{r}
+df_cif_transplant <- df_cif_transplant %>% filter(!is.na(SVI_decile_num))
+df_cif_transplant = df_cif_transplant %>% filter(SVI_decile_num %in% c(1,10))
+```
+
+```{r}
+# Adjust breaks if the range is very small or has few unique values
+max_dial_time <- max(df_cif_transplant$dial_time, na.rm = TRUE)
+min_dial_time <- min(df_cif_transplant$dial_time, na.rm = TRUE)
+
+# Ensure breaks do not exceed the range
+if (max_dial_time > min_dial_time) {
+  breaks <- seq(min_dial_time, max_dial_time, by = 365)
+} else {
+  breaks <- c(min_dial_time, max_dial_time)
+}
+
+# Create bins with adjusted breaks
+df_cif_transplant <- df_cif_transplant %>%
+  mutate(dial_time_bin = cut(dial_time, breaks = breaks, include.lowest = TRUE))
+
+df_cif_transplant_bin1 <- df_cif_transplant %>% 
+  filter(dial_time_bin == "(1.09e+03,1.46e+03]")
+```
+
+```{r}
+# Plot cuminc of transplant
+cif_transplant_SVI_4yrs_nb <-
+tidycmprsk::cuminc(Surv(time = time, event = as.factor(event)) ~ SVI_decile_num + dial_time_bin, data = df_cif_transplant_bin1) %>%
+  ggcuminc()+
+  labs(
+    x = "Days",
+    y = "Cumulative Incidence of Transplant",
+    title = "Incidence of Transplant by SVI - dial_time 3-4 yrs",
+    color = "SVI Decile"
+    )+
+  scale_ggsurvfit()+
+  scale_x_continuous(limits =c(0,1800)) +
+  theme_minimal()+
+  guides(fill = "none", color = guide_legend(override.aes = list(linetype = 1)))
+cif_transplant_SVI_4yrs_nb
+```
+
+```{r}
+library(gridExtra)
+
+SVI_dial_nb <- grid.arrange(cif_transplant_SVI_nb, cif_transplant_SVI_preemp_nb, cif_transplant_SVI_year_nb, cif_transplant_SVI_2yrs_nb, cif_transplant_SVI_3yrs_nb, cif_transplant_SVI_4yrs_nb, ncol = 2, nrow = 4)
+```
+
+```{r}
+ggsave("SVI_dial_nb.png", plot = SVI_dial_nb, width = 20, height = 10, dpi = 300)
+```
+
+SVI - Transplant as outcome
+```{r}
+df_cif_transplant_SVI <- df_cand_kipa_w_scores %>%
+  mutate(time = as.numeric(survival_time),  # Ensure time is numeric
+         event = as.numeric(transplant_outcome)) %>%
+  filter(!is.na(time) & !is.na(event)) %>%
+  select(PX_ID, death_outcome, time, event, SVI_decile_num, typeO, CAN_ABO)
+```
+
+Filter to 1st and 10th decile
+```{r}
+df_cif_transplant_SVI <- df_cif_transplant_SVI %>% filter(!is.na(SVI_decile_num))
+df_cif_transplant_SVI = df_cif_transplant_SVI %>% filter(SVI_decile_num %in% c(1,10))
+```
+
+```{r}
+# Plot cuminc of transplant
+cif_transplant_SVI_test <-
+tidycmprsk::cuminc(Surv(time = time, event = as.factor(event)) ~ typeO, data = df_cif_transplant_SVI) %>%
+  ggcuminc()+
+  labs(
+    x = "Days",
+    y = "Cumulative Incidence of Transplant",
+    title = "Incidence of Transplant by SVI - all dial_times",
+    color = "SVI Decile"
+    )+
+  scale_ggsurvfit()+
+  scale_x_continuous(limits =c(0,1800)) +
+  theme_minimal()+
+  guides(fill = "none", color = guide_legend(override.aes = list(linetype = 1)))
+cif_transplant_SVI_test
+```
+SVI - Transplant as outcome
+```{r}
+df_cand_kipa_w_scores <- df_cand_kipa_w_scores %>%
+  mutate(
+    dial_time_yrs = case_when(
+      dial_time < 365 ~ "0-1 year",  # Less than 1 year
+      dial_time >= 365 & dial_time < 730 ~ "1-2 years",  # 1-2 years
+      dial_time >= 730 & dial_time < 1095 ~ "2-3 years",  # 2-3 years
+      TRUE ~ as.character(NA)  # Handle values that do not fit the criteria
+    )
+  )
+
+df_cif_transplant <- df_cand_kipa_w_scores %>%
+  mutate(time = as.numeric(survival_time),  # Ensure time is numeric
+         event = as.numeric(transplant_outcome)) %>%
+  filter(!is.na(time) & !is.na(event)) %>%
+  select(PX_ID, transplant_outcome, time, event, SVI_decile_num, dial_time, typeO, dial_time_yrs)
+
+# Convert dial_time to numeric
+df_cif_transplant <- df_cif_transplant %>%
+  mutate(dial_time = as.numeric(dial_time))
+```
+
+Filter to 1st and 10th decile
+```{r}
+df_cif_transplant <- df_cif_transplant %>% filter(!is.na(SVI_decile_num))
+df_cif_transplant = df_cif_transplant %>% filter(SVI_decile_num %in% c(1,10))
+df_cif_transplant <- df_cif_transplant %>% 
+  mutate(
+    SVI_decile_test = case_when(
+      SVI_decile_num == 1 ~ "Decile 1",
+      SVI_decile_num == 10 ~ "Decile 10"
+    ))
+```
+
+```{r}
+# Adjust breaks if the range is very small or has few unique values
+max_dial_time <- max(df_cif_transplant$dial_time, na.rm = TRUE)
+min_dial_time <- min(df_cif_transplant$dial_time, na.rm = TRUE)
+
+# Ensure breaks do not exceed the range
+if (max_dial_time > min_dial_time) {
+  breaks <- seq(min_dial_time, max_dial_time, by = 365)
+} else {
+  breaks <- c(min_dial_time, max_dial_time)
+}
+
+# Create bins with adjusted breaks
+df_cif_transplant <- df_cif_transplant %>%
+  mutate(dial_time_bin = cut(dial_time, breaks = breaks, include.lowest = TRUE))
+```
+
+
+```{r}
+df_cif_transplant_bin1 <- df_cif_transplant %>% 
+  filter(dial_time_bin == "[0,365]")
+```
+
+```{r}
+cif_transplant_SVI_test2 <-
+tidycmprsk::cuminc(Surv(time = time, event = as.factor(event)) ~ SVI_decile_test + dial_time_yrs, data = df_cif_transplant) 
+cif_transplant_SVI_test2
+```
+
+
+```{r}
+# Plot cuminc of transplant
+cif_transplant_SVI_test2 <-
+tidycmprsk::cuminc(Surv(time = time, event = as.factor(event)) ~ SVI_decile_test + dial_time_yrs, data = df_cif_transplant) %>%
+  ggcuminc()+
+  labs(
+    x = "Days on Waitlist",
+    y = "Cumulative Incidence of Deceased Donor Transplant",
+    title = "Incidence of Transplant by SVI",
+    color = "SVI Decile, Dialysis Time at Listing"
+    )+
+  scale_ggsurvfit()+
+  scale_x_continuous(limits =c(0,1826)) +
+  theme_minimal()+
+  theme(
+    # Increase font size for titles
+    plot.title = element_text(size = 16),
+    # Increase font size for axis labels
+    axis.title.x = element_text(size = 14),
+    axis.title.y = element_text(size = 14),
+    # Increase font size for axis text
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    # Increase font size for legend
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12)
+  ) +
+  guides(fill = "none", color = guide_legend(override.aes = list(linetype = 1)))
+cif_transplant_SVI_test2
+```
+SVI - Transplant as outcome
+```{r}
+df_cand_kipa_w_scores <- df_cand_kipa_w_scores %>%
+  mutate(
+    dial_time_yrs = case_when(
+      dial_time < 365 ~ "0-1 year",  # Less than 1 year
+      dial_time >= 365 & dial_time < 730 ~ "1-2 years",  # 1-2 years
+      dial_time >= 730 & dial_time < 1095 ~ "2-3 years",  # 2-3 years
+      TRUE ~ as.character(NA)  # Handle values that do not fit the criteria
+    )
+  )
+
+df_cif_transplant <- df_cand_kipa_w_scores %>%
+  mutate(time = as.numeric(survival_time),  # Ensure time is numeric
+         event = as.numeric(transplant_outcome)) %>%
+  filter(!is.na(time) & !is.na(event)) %>%
+  select(PX_ID, transplant_outcome, time, event, SVI_decile_num, dial_time, typeO, dial_time_yrs)
+
+df_cif_transplant <- df_cif_transplant %>%
+  filter(
+    (SVI_decile_num == 1 & dial_time_yrs == "0-1 year") | 
+    (SVI_decile_num == 10 & dial_time_yrs == "2-3 years")
+  )
+
+
+# Convert dial_time to numeric
+df_cif_transplant <- df_cif_transplant %>%
+  mutate(dial_time = as.numeric(dial_time))
+```
+
+Filter to 1st and 10th decile
+```{r}
+df_cif_transplant <- df_cif_transplant %>% filter(!is.na(SVI_decile_num))
+df_cif_transplant = df_cif_transplant %>% filter(SVI_decile_num %in% c(1,10))
+df_cif_transplant <- df_cif_transplant %>% 
+  mutate(
+    SVI_decile_test = case_when(
+      SVI_decile_num == 1 ~ "Decile 1",
+      SVI_decile_num == 10 ~ "Decile 10"
+    ))
+```
+
+```{r}
+# Adjust breaks if the range is very small or has few unique values
+max_dial_time <- max(df_cif_transplant$dial_time, na.rm = TRUE)
+min_dial_time <- min(df_cif_transplant$dial_time, na.rm = TRUE)
+
+# Ensure breaks do not exceed the range
+if (max_dial_time > min_dial_time) {
+  breaks <- seq(min_dial_time, max_dial_time, by = 365)
+} else {
+  breaks <- c(min_dial_time, max_dial_time)
+}
+
+# Create bins with adjusted breaks
+df_cif_transplant <- df_cif_transplant %>%
+  mutate(dial_time_bin = cut(dial_time, breaks = breaks, include.lowest = TRUE))
+```
+
+```{r}
+cif_transplant_SVI_test2 <-
+tidycmprsk::cuminc(Surv(time = time, event = as.factor(event)) ~ SVI_decile_test + dial_time_yrs, data = df_cif_transplant) 
+cif_transplant_SVI_test2
+```
+
+```{r}
+ggsave("SVI_decile_dial.png", plot = cif_transplant_SVI_test2, width = 10, height = 5, dpi = 300)
+```
