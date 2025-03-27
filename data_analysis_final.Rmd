@@ -1,0 +1,659 @@
+---
+title: "Untitled"
+author: "Olivia"
+date: "2024-08-20"
+output: html_document
+---
+
+```{r}
+# Load the .RData file and libraries
+load("./df_cand_kipa_w_scores.RData")
+library(dplyr)
+library(tidyr)
+library(survival)
+library(ggsurvfit)
+```
+# Table 1
+
+```{r}
+
+create_summary <- function(data, decile_var, label) {
+  data %>%
+    filter({{ decile_var }} %in% c(1, 10)) %>%
+    droplevels() %>%
+    tbl_summary(
+      by = {{ decile_var }},
+      include = c(CAN_AGE_AT_LISTING, CAN_GENDER, CAN_RACE_SRTR, CAN_ETHNICITY_SRTR,  preemptive_listing, dial_time, insurance),
+      statistic = list(
+        all_continuous() ~ "{median} ({p25}, {p75})",  # Median and IQR for continuous variables
+        all_categorical() ~ "{n} ({p}%)"               # Count and percentage for categorical
+      ),
+      missing_text = "(Missing)"
+    ) %>%
+    add_p() %>%
+    modify_header(label = glue::glue("**{label}**")) %>%  # Dynamic header label
+    bold_p(t = 0.05) %>%                                  # Bold significant p-values
+    bold_labels()                                         # Bold variable labels
+}
+
+# Creating summaries for each index
+svi_summary <- create_summary(df_cand_kipa_w_scores, SVI_decile, "SVI")
+adi_summary <- create_summary(df_cand_kipa_w_scores, ADI_decile, "ADI")
+svm_summary <- create_summary(df_cand_kipa_w_scores, SVM_decile, "SVM")
+dci_summary <- create_summary(df_cand_kipa_w_scores, DCI_decile, "DCI")
+
+# Overall summary without grouping
+overall_summary <- tbl_summary(
+  df_cand_kipa_w_scores,
+  include = c(CAN_AGE_AT_LISTING, CAN_GENDER, CAN_RACE_SRTR, CAN_ETHNICITY_SRTR, preemptive_listing, dial_time, insurance),
+  statistic = list(
+    all_continuous() ~ "{median} ({p25}, {p75})",     # Mean (SD) for continuous variables
+    all_categorical() ~ "{n} ({p}%)"        # Count (percentage) for categorical variables
+  ),
+  missing_text = "(Missing)"
+) %>%
+  modify_header(label = "**Overall**") %>%
+  bold_labels()
+
+# Combining all tables into one
+combined_summary <- tbl_merge(
+  list(overall_summary, svi_summary, adi_summary, svm_summary, dci_summary),
+  tab_spanner = c("**Overall**", "**SVI**", "**ADI**", "**SVM**", "**DCI**")
+)
+
+# Display the combined summary
+combined_summary
+
+
+```
+
+
+
+```{r}
+
+#data frames for each dialysis time bin
+preemptive = df_cand_kipa_w_scores %>% filter(dial_time_bins == "Preemptive")
+less_than_1 = df_cand_kipa_w_scores %>% filter(dial_time_bins == "Less than 1 year")
+less_than_3 = df_cand_kipa_w_scores %>% filter(dial_time_bins == "1 to 3 years")
+more_than_3 = df_cand_kipa_w_scores %>% filter(dial_time_bins == "Greater than 3 years")
+```
+
+
+
+
+```{r}
+#dataframes for only certain index, deciles 1 and 10
+SVI_reduced = df_cand_kipa_w_scores %>% filter(SVI_decile %in% c(1,10))
+ADI_reduced = df_cand_kipa_w_scores %>% filter(ADI_decile %in% c(1,10))
+SVM_reduced = df_cand_kipa_w_scores %>% filter(SVM_decile %in% c(1,10))
+DCI_reduced = df_cand_kipa_w_scores %>% filter(DCI_decile %in% c(1,10))
+```
+
+# Comparing Cumulative Indices at different dialysis levels
+
+```{r}
+svi_dial_3 = SVI_reduced %>% filter(dial_time_bins == "Greater than 3 years")
+cuminc_obj <- tidycmprsk::cuminc(Surv(time = time, event = as.factor(status)) ~ SVI_decile + dial_time_bins, 
+                                 data = svi_dial_3)
+
+svi_dial_2 = SVI_reduced %>% filter(dial_time_bins == "1 to 3 years")
+cuminc_obj <- tidycmprsk::cuminc(Surv(time = time, event = as.factor(status)) ~ SVI_decile + dial_time_bins, 
+                                 data = svi_dial_2)
+
+svi_dial_1 = SVI_reduced %>% filter(dial_time_bins == "Less than 1 year")
+cuminc_obj <- tidycmprsk::cuminc(Surv(time = time, event = as.factor(status)) ~ SVI_decile + dial_time_bins, 
+                                 data = svi_dial_1)
+
+svi_no_dial = SVI_reduced %>% filter(dial_time_bins == "Preemptive")
+cuminc_obj <- tidycmprsk::cuminc(Surv(time = time, event = as.factor(status)) ~ SVI_decile + dial_time_bins, 
+                                 data = svi_no_dial)
+
+
+svi_dial_3_cuminc = tidycmprsk::cuminc(Surv(time = time, event = as.factor(status)) ~ SVI_decile + dial_time_bins, data = svi_dial_3) %>% tidycmprsk::tbl_cuminc(times = c(1826)) %>%
+  add_p()
+
+svi_dial_2_cuminc = tidycmprsk::cuminc(Surv(time = time, event = as.factor(status)) ~ SVI_decile + dial_time_bins, data = svi_dial_2) %>% tidycmprsk::tbl_cuminc(times = c(1826)) %>%
+  add_p()
+
+svi_dial_1_cuminc = tidycmprsk::cuminc(Surv(time = time, event = as.factor(status)) ~ SVI_decile + dial_time_bins, data = svi_dial_1) %>% tidycmprsk::tbl_cuminc(times = c(1826)) %>%
+  add_p()
+
+svi_dial_1_cuminc = tidycmprsk::cuminc(Surv(time = time, event = as.factor(status)) ~ SVI_decile + dial_time_bins, data = svi_no_dial) %>% tidycmprsk::tbl_cuminc(times = c(1826)) %>%
+  add_p()
+```
+
+# Figure 1
+
+```{r}
+
+cuminc_obj <- tidycmprsk::cuminc(Surv(time = time, event = as.factor(status)) ~ SVI_decile + dial_time_bins, 
+                                 data = SVI_reduced)
+
+data = cuminc_obj$tidy %>% filter(outcome == 'DDKT')
+data = data %>%
+  separate(strata, into = c("SVI_decile", "dial_time_bins"), sep = ", ") %>% mutate(
+    SVI_decile = as.factor(as.numeric(SVI_decile)),
+    dial_time_bins = factor(dial_time_bins, levels = c("Preemptive", "Less than 1 year", "1 to 3 years", "Greater than 3 years"))
+  )
+
+ggplot(data, aes(x = time/365.25, y = estimate, color = dial_time_bins, linetype = SVI_decile)) +
+  geom_line() +
+  scale_linetype_manual(name = "SVI Decile", values = c("solid", "dashed", "dotted", "dotdash")) + 
+  theme_bw() + 
+  scale_y_continuous(limits = c(0,1)) +
+  labs(
+    color = "Dialysis Time",
+    x = "Years on Waitlist",
+    y = "Cumulative Incidence",
+    title = "Cumulative incidence of DDKT - SVI"
+  ) +
+  theme(
+    text = element_text(size = 14, family = "sans", face = "plain"),  # global font size & no bold
+    plot.title = element_text(size = 16, face = "plain", hjust = 0.5),  # larger title, centered
+    axis.title = element_text(size = 14, face = "plain"),
+    axis.text = element_text(size = 12, face = "plain"),
+    legend.title = element_text(size = 13, face = "plain"),
+    legend.text = element_text(size = 12, face = "plain")
+  )
+  
+ggsave("SVI_decile_dial.png", width = 9, height = 7, dpi = 400)
+
+#median time to tx
+data %>% filter(dial_time_bins == 'Greater than 3 years' & SVI_decile == 1 & estimate >= .5)
+data %>% filter(dial_time_bins == 'Greater than 3 years' & SVI_decile == 10 & estimate >= .5)
+
+```
+# Figure 2
+
+```{r}
+# Create data frame
+## SVM
+svm_preemp <- df_cand_kipa_w_scores %>%
+  group_by(SVM_decile, preemptive_listing) %>% # Group by decile and result
+  summarize(count = n(), .groups = "drop") %>% # Create count column
+  as.data.frame() %>% # Convert to data frame
+  group_by(SVM_decile) %>%
+  mutate(SVM = (count / sum(count)) * 100) %>% # Create percentage column
+  ungroup() %>%
+  filter(preemptive_listing == 1) %>% # Keep only preemptive listing
+  select(SVM_decile, SVM) # Keep columns of interest
+svm_preemp
+
+## SVI
+svi_preemp <- df_cand_kipa_w_scores %>%
+  group_by(SVI_decile, preemptive_listing) %>% # Group by decile and result
+  summarize(count = n(), .groups = "drop") %>% # Create count column
+  as.data.frame() %>% # Convert to data frame
+  group_by(SVI_decile) %>%
+  mutate(SVI = (count / sum(count)) * 100) %>% # Create percentage column
+  ungroup() %>%
+  filter(preemptive_listing == 1) %>% # Keep only preemptive listing
+  select(SVI_decile, SVI)  # Keep columns of interest
+svi_preemp
+
+## ADI
+adi_preemp <- df_cand_kipa_w_scores %>%
+  group_by(ADI_decile, preemptive_listing) %>% # Group by decile and result
+  summarize(count = n(), .groups = "drop") %>% # Create count column
+  as.data.frame() %>% # Convert to data frame
+  group_by(ADI_decile) %>%
+  mutate(ADI = (count / sum(count)) * 100) %>% # Create percentage column
+  ungroup() %>%
+  filter(preemptive_listing == 1) %>% # Keep only preemptive listing
+  select(ADI_decile, ADI)  # Keep columns of interest
+adi_preemp
+
+## DCI
+dci_preemp <- df_cand_kipa_w_scores %>%
+  group_by(DCI_decile, preemptive_listing) %>% # Group by decile and result
+  summarize(count = n(), .groups = "drop") %>%# Create count column
+  as.data.frame() %>% # Convert to data frame
+  group_by(DCI_decile) %>%
+  mutate(DCI = (count / sum(count)) * 100) %>% # Create percentage column
+  ungroup() %>%
+  filter(preemptive_listing == 1) %>% # Keep only preemptive listing
+  select(DCI_decile, DCI)  # Keep columns of interest
+dci_preemp
+dci_preemp = dci_preemp %>% filter(!is.na(DCI_decile))
+
+# Combine all data sets
+preemp_df <- cbind(svm_preemp, svi_preemp, adi_preemp, dci_preemp) %>% # Bind by columns
+  select(-SVI_decile, -ADI_decile, -DCI_decile) %>% # Remove extra decile columns
+  rename(decile = SVM_decile) # Rename to have single decile column
+preemp_df
+
+rm(svm_preemp, svi_preemp, adi_preemp, dci_preemp) # Remove intermediate data frames
+
+# Reshape data
+preemp_df <- preemp_df %>% 
+  pivot_longer(cols = c(SVM, SVI, ADI, DCI), # Turn the data for easier graphing 
+               names_to = "index", # Set name of columns to "index"
+               values_to = "percent") # Set value of columns to "percent"
+
+# Create bar graph w/o facets
+preemp_df_visual <- ggplot(preemp_df, aes(x = decile, y = percent, fill = index)) + # Set base
+  geom_col(position = "dodge") + # Columns to be side-by-side
+  labs(title = "Percentage of Preemptive Listing by Decile", # Set title
+       x = "Decile", # Set x-axis label
+       y = "Percentage", # Set y-axis label
+       fill = "Index") + # Set legend title
+  theme_classic() + # Set theme (preference)
+  scale_y_continuous(limits = c(0, 60), breaks = seq(0, 60, by = 10)) +
+  theme(
+    text = element_text(size = 14, family = "sans", face = "plain"),  # global font size & no bold
+    plot.title = element_text(size = 16, face = "plain", hjust = 0.5),  # larger title, centered
+    axis.title = element_text(size = 14, face = "plain"),
+    axis.text = element_text(size = 12, face = "plain"),
+    legend.title = element_text(size = 13, face = "plain"),
+    legend.text = element_text(size = 12, face = "plain")
+  )
+preemp_df_visual # view
+
+ggsave(preemp_df_visual, file = "preemp_decile.png", width = 12, height = 7, dpi = 400)
+```
+
+
+# Figure 3
+```{r}
+# Median Dialysis Time v. Decile (visual)
+# Convert dialysis_time_at_list back to years
+df_cand_kipa_w_scores <- df_cand_kipa_w_scores %>%
+  mutate(dialysis_time_at_list = case_when(
+    is.na(CAN_DIAL_DT) | as.Date(min_list_date) < as.Date(CAN_DIAL_DT) ~ 0, # Input 0 for patients never on dialysis
+    T ~ as.numeric(difftime(min_list_date, CAN_DIAL_DT)) / 365 # Turn to year
+  ))
+
+# SVM
+svm_dialysis <- df_cand_kipa_w_scores %>% # Create data frame for SVM Decile v. Dialysis Time
+  group_by(SVM_decile) %>% # Group by decile
+  summarize(SVM = dialysis_time_at_list) # Calculate median
+svm_dialysis # view
+
+# SVI
+svi_dialysis <- df_cand_kipa_w_scores %>% # Create data frame for SVI Decile v. Dialysis Time
+  group_by(SVI_decile) %>% # Group by decile
+  summarize(SVI = dialysis_time_at_list) # Calculate median
+svi_dialysis # view
+
+# ADI
+adi_dialysis <- df_cand_kipa_w_scores %>% # Create data frame for ADI Decile v. Dialysis Time
+  group_by(ADI_decile) %>% # Group by decile
+  summarize(ADI = dialysis_time_at_list) # Calculate median
+adi_dialysis # view
+
+# DCI
+dci_dialysis <- df_cand_kipa_w_scores %>% # Create data frame for DCI Decile v. Dialysis Time
+  group_by(DCI_decile) %>% # Group by decile
+  summarize(DCI = dialysis_time_at_list) # Calculate median
+dci_dialysis # view
+
+# Join data frames
+dialysis_v_decile <- bind_cols(svm_dialysis, svi_dialysis, adi_dialysis, dci_dialysis) %>% # Combine all data
+  mutate(decile = SVM_decile) %>% # Change one decile column to "decile"
+  select(-SVM_decile, -SVI_decile, -ADI_decile, -DCI_decile) # Remove other decile columns
+dialysis_v_decile
+
+rm(svm_dialysis, svi_dialysis, adi_dialysis, dci_dialysis) # Remove intermediate data frames
+
+# Reshape data frame
+dialysis_v_decile <- dialysis_v_decile %>%
+  pivot_longer(cols = c(SVM, SVI, ADI, DCI), # Select columns
+               names_to = "index", # Name of columns to "index"
+               values_to = "dialysis_time") # values of column to "dialysis_time
+
+dialysis_v_decile$decile <- as.factor(dialysis_v_decile$decile) # Set decile to factor
+
+# Visualize graph
+dialysis_v_decile_viz <- dialysis_v_decile %>% # Use this data frame
+  ggplot(aes(x = decile, y = dialysis_time, fill = index)) + # Set x-axis
+  geom_boxplot() + # Create Boxplot for graph
+  facet_wrap(~ index) + # Create grid
+  theme_bw() + # Set theme to classic (preference)
+  scale_y_continuous(limits = c(0, 5), breaks = seq(0, 5, by = 1)) + # Create specific y-axis scale
+  labs(title = "Dialysis Time at Listing by Decile", # Set title
+       x = "Decile", # Set x-axis label
+       y = "Dialysis Time at Listing (Year)", # Set y-axis label
+       fill = "Index")+
+  theme(
+    text = element_text(size = 14, family = "sans", face = "plain"),  # global font size & no bold
+    plot.title = element_text(size = 16, face = "plain", hjust = 0.5),  # larger title, centered
+    axis.title = element_text(size = 14, face = "plain"),
+    axis.text = element_text(size = 12, face = "plain"),
+    legend.title = element_text(size = 13, face = "plain"),
+    legend.text = element_text(size = 12, face = "plain")
+  )
+dialysis_v_decile_viz # view
+
+ggsave(dialysis_v_decile_viz, file  = "dial_decile.png", width = 12, height = 7, dpi = 400)
+# Save to PDF
+```
+
+# Comparing SVI deciles across different dialysis time
+
+```{r}
+svi_filtered = SVI_reduced %>% filter((SVI_decile == 1 & dial_time_bins == 'Less than 1 year') | (SVI_decile == 10 & dial_time_bins == '1 to 3 years'))
+cuminc_obj <- tidycmprsk::cuminc(Surv(time = time, event = as.factor(status)) ~ SVI_decile + dial_time_bins, 
+                                 data = svi_filtered)
+
+```
+
+# Efigure 1
+
+```{r}
+
+cuminc_obj <- tidycmprsk::cuminc(Surv(time = time, event = as.factor(status)) ~ SVM_decile + dial_time_bins, 
+                                 data = SVM_reduced)
+
+data = cuminc_obj$tidy %>% filter(outcome == 'DDKT')
+data = data %>%
+  separate(strata, into = c("SVM_decile", "dial_time_bins"), sep = ", ") %>% mutate(
+    SVM_decile = as.factor(as.numeric(SVM_decile)),
+    dial_time_bins = factor(dial_time_bins, levels = c("Preemptive", "Less than 1 year", "1 to 3 years", "Greater than 3 years"))
+  )
+
+ggplot(data, aes(x = time/365.25, y = estimate, color = dial_time_bins, linetype = SVM_decile)) +
+  geom_line() +
+  scale_linetype_manual(name = "SVM Decile", values = c("solid", "dashed", "dotted", "dotdash")) + 
+  theme_bw() + 
+  scale_y_continuous(limits = c(0,1)) +
+  labs(
+    color = "Dialysis Time",
+    x = "Years on Waitlist",
+    y = "Cumulative Incidence",
+    title = "Cumulative incidence of DDKT - SVM"
+  ) +
+  theme(
+    text = element_text(size = 14, family = "sans", face = "plain"),  # global font size & no bold
+    plot.title = element_text(size = 16, face = "plain", hjust = 0.5),  # larger title, centered
+    axis.title = element_text(size = 14, face = "plain"),
+    axis.text = element_text(size = 12, face = "plain"),
+    legend.title = element_text(size = 13, face = "plain"),
+    legend.text = element_text(size = 12, face = "plain")
+  )
+  
+ggsave("SVM_decile_dial.png", width = 9, height = 7, dpi = 400)
+
+#median time to tx
+data %>% filter(dial_time_bins == 'Greater than 3 years' & SVM_decile == 1 & estimate >= .5)
+data %>% filter(dial_time_bins == 'Greater than 3 years' & SVM_decile == 10 & estimate >= .5)
+
+```
+# Efigure 2
+
+```{r}
+
+cuminc_obj <- tidycmprsk::cuminc(Surv(time = time, event = as.factor(status)) ~ DCI_decile + dial_time_bins, 
+                                 data = DCI_reduced)
+
+data = cuminc_obj$tidy %>% filter(outcome == 'DDKT')
+data = data %>%
+  separate(strata, into = c("DCI_decile", "dial_time_bins"), sep = ", ") %>% mutate(
+    DCI_decile = as.factor(as.numeric(DCI_decile)),
+    dial_time_bins = factor(dial_time_bins, levels = c("Preemptive", "Less than 1 year", "1 to 3 years", "Greater than 3 years"))
+  )
+
+ggplot(data, aes(x = time/365.25, y = estimate, color = dial_time_bins, linetype = DCI_decile)) +
+  geom_line() +
+  scale_linetype_manual(name = "DCI Decile", values = c("solid", "dashed", "dotted", "dotdash")) + 
+  theme_bw() + 
+  scale_y_continuous(limits = c(0,1)) +
+  labs(
+    color = "Dialysis Time",
+    x = "Years on Waitlist",
+    y = "Cumulative Incidence",
+    title = "Cumulative incidence of DDKT - DCI"
+  ) +
+  theme(
+    text = element_text(size = 14, family = "sans", face = "plain"),  # global font size & no bold
+    plot.title = element_text(size = 16, face = "plain", hjust = 0.5),  # larger title, centered
+    axis.title = element_text(size = 14, face = "plain"),
+    axis.text = element_text(size = 12, face = "plain"),
+    legend.title = element_text(size = 13, face = "plain"),
+    legend.text = element_text(size = 12, face = "plain")
+  )
+  
+ggsave("DCI_decile_dial.png", width = 9, height = 7, dpi = 400)
+
+#median time to tx
+data %>% filter(dial_time_bins == 'Greater than 3 years' & DCI_decile == 1 & estimate >= .5)
+data %>% filter(dial_time_bins == 'Greater than 3 years' & DCI_decile == 10 & estimate >= .5)
+
+```
+# Efigure 3
+
+```{r}
+
+cuminc_obj <- tidycmprsk::cuminc(Surv(time = time, event = as.factor(status)) ~ ADI_decile + dial_time_bins, 
+                                 data = ADI_reduced)
+
+data = cuminc_obj$tidy %>% filter(outcome == 'DDKT')
+data = data %>%
+  separate(strata, into = c("ADI_decile", "dial_time_bins"), sep = ", ") %>% mutate(
+    ADI_decile = as.factor(as.numeric(ADI_decile)),
+    dial_time_bins = factor(dial_time_bins, levels = c("Preemptive", "Less than 1 year", "1 to 3 years", "Greater than 3 years"))
+  )
+
+ggplot(data, aes(x = time/365.25, y = estimate, color = dial_time_bins, linetype = ADI_decile)) +
+  geom_line() +
+  scale_linetype_manual(name = "ADI Decile", values = c("solid", "dashed", "dotted", "dotdash")) + 
+  theme_bw() + 
+  scale_y_continuous(limits = c(0,1)) +
+  labs(
+    color = "Dialysis Time",
+    x = "Years on Waitlist",
+    y = "Cumulative Incidence",
+    title = "Cumulative incidence of DDKT - ADI"
+  ) +
+  theme(
+    text = element_text(size = 14, family = "sans", face = "plain"),  # global font size & no bold
+    plot.title = element_text(size = 16, face = "plain", hjust = 0.5),  # larger title, centered
+    axis.title = element_text(size = 14, face = "plain"),
+    axis.text = element_text(size = 12, face = "plain"),
+    legend.title = element_text(size = 13, face = "plain"),
+    legend.text = element_text(size = 12, face = "plain")
+  )
+  
+ggsave("ADI_decile_dial.png", width = 9, height = 7, dpi = 400)
+
+#median time to tx
+data %>% filter(dial_time_bins == 'Greater than 3 years' & ADI_decile == 1 & estimate >= .5)
+data %>% filter(dial_time_bins == 'Greater than 3 years' & ADI_decile == 10 & estimate >= .5)
+
+```
+
+# Efigure 4
+
+```{r}
+
+cuminc_obj <- tidycmprsk::cuminc(Surv(time = time, event = as.factor(status)) ~ SVI_decile,
+                                 data = df_cand_kipa_w_scores)
+
+
+data = cuminc_obj$tidy %>% filter(outcome == 'LDKT')
+blue_palette <- colorRampPalette(c("lightblue", "darkblue"))(10)
+
+ggplot(data, aes(x = time/365.25, y = estimate, color = strata)) +
+  geom_line() +  # Adjust line thickness
+  theme_bw() + 
+  scale_y_continuous(limits = c(0,1)) +
+  scale_color_manual(values = blue_palette) +
+  labs(color = "SVI Decile",
+           x = "Years on Waitlist",
+         y = "Cumulative Incidence",
+         title = "Cumulative incidence of LDKT - SVI") +
+  theme(
+    text = element_text(size = 14, family = "sans", face = "plain"),  # global font size & no bold
+    plot.title = element_text(size = 16, face = "plain", hjust = 0.5),  # larger title, centered
+    axis.title = element_text(size = 14, face = "plain"),
+    axis.text = element_text(size = 12, face = "plain"),
+    legend.title = element_text(size = 13, face = "plain"),
+    legend.text = element_text(size = 12, face = "plain")
+  )
+  
+ggsave("ADI_decile_dial.png", width = 10, height = 7, dpi = 400)
+
+cuminc_obj <- tidycmprsk::cuminc(Surv(time = time, event = as.factor(status)) ~ SVI_decile,
+                                 data = SVI_reduced)
+cuminc_obj
+```
+# Efigure 5
+
+```{r}
+
+cuminc_obj <- tidycmprsk::cuminc(Surv(time = time, event = as.factor(status)) ~ SVM_decile,
+                                 data = df_cand_kipa_w_scores)
+
+
+data = cuminc_obj$tidy %>% filter(outcome == 'LDKT')
+
+ggplot(data, aes(x = time/365.25, y = estimate, color = strata)) +
+  geom_line() +  # Adjust line thickness
+  theme_bw() + 
+  scale_y_continuous(limits = c(0,1)) +
+  scale_color_manual(values = blue_palette) +
+  labs(color = "SVM Decile", 
+       x = "Years on Waitlist",
+         y = "Cumulative Incidence",
+         title = "Cumulative incidence of LDKT - SVM") +
+  theme(
+    text = element_text(size = 14, family = "sans", face = "plain"),  # global font size & no bold
+    plot.title = element_text(size = 16, face = "plain", hjust = 0.5),  # larger title, centered
+    axis.title = element_text(size = 14, face = "plain"),
+    axis.text = element_text(size = 12, face = "plain"),
+    legend.title = element_text(size = 13, face = "plain"),
+    legend.text = element_text(size = 12, face = "plain")
+  )
+  
+ggsave("SVM_decile_dial.png", width = 10, height = 7, dpi = 400)
+
+cuminc_obj <- tidycmprsk::cuminc(Surv(time = time, event = as.factor(status)) ~ SVM_decile,
+                                 data = SVM_reduced)
+cuminc_obj
+```
+
+# Efigure 6
+
+```{r}
+
+cuminc_obj <- tidycmprsk::cuminc(Surv(time = time, event = as.factor(status)) ~ DCI_decile,
+                                 data = df_cand_kipa_w_scores)
+
+
+data = cuminc_obj$tidy %>% filter(outcome == 'LDKT')
+
+ggplot(data, aes(x = time/365.25, y = estimate, color = strata)) +
+  geom_line() +  # Adjust line thickness
+  theme_bw() + 
+  scale_y_continuous(limits = c(0,1)) +
+  scale_color_manual(values = blue_palette) +
+  labs(color = "DCI Decile", 
+       x = "Years on Waitlist",
+         y = "Cumulative Incidence",
+         title = "Cumulative incidence of LDKT - DCI") +
+  theme(
+    text = element_text(size = 14, family = "sans", face = "plain"),  # global font size & no bold
+    plot.title = element_text(size = 16, face = "plain", hjust = 0.5),  # larger title, centered
+    axis.title = element_text(size = 14, face = "plain"),
+    axis.text = element_text(size = 12, face = "plain"),
+    legend.title = element_text(size = 13, face = "plain"),
+    legend.text = element_text(size = 12, face = "plain")
+  )
+  
+ggsave("ldkt_DCI.png", width = 10, height = 7, dpi = 400)
+
+cuminc_obj <- tidycmprsk::cuminc(Surv(time = time, event = as.factor(status)) ~ DCI_decile,
+                                 data = DCI_reduced)
+cuminc_obj
+```
+# Efigure 7
+
+```{r}
+
+cuminc_obj <- tidycmprsk::cuminc(Surv(time = time, event = as.factor(status)) ~ ADI_decile,
+                                 data = df_cand_kipa_w_scores)
+
+
+data = cuminc_obj$tidy %>% filter(outcome == 'LDKT')
+
+ggplot(data, aes(x = time/365.25, y = estimate, color = strata)) +
+  geom_line() +  # Adjust line thickness
+  theme_bw() + 
+  scale_y_continuous(limits = c(0,1)) +
+  scale_color_manual(values = blue_palette) +
+  labs(color = "ADI Decile", 
+       x = "Years on Waitlist",
+         y = "Cumulative Incidence",
+         title = "Cumulative incidence of LDKT - ADI") +
+  theme(
+    text = element_text(size = 14, family = "sans", face = "plain"),  # global font size & no bold
+    plot.title = element_text(size = 16, face = "plain", hjust = 0.5),  # larger title, centered
+    axis.title = element_text(size = 14, face = "plain"),
+    axis.text = element_text(size = 12, face = "plain"),
+    legend.title = element_text(size = 13, face = "plain"),
+    legend.text = element_text(size = 12, face = "plain")
+  )
+  
+ggsave("ldkt_ADI.png", width = 10, height = 7, dpi = 400)
+
+cuminc_obj <- tidycmprsk::cuminc(Surv(time = time, event = as.factor(status)) ~ ADI_decile,
+                                 data = ADI_reduced)
+cuminc_obj
+```
+
+  
+
+# Credit to Alex Wang for Efigure 8. Source code for that figure can be found at https://github.com/Healthcare-Allocation-Lab/SDoH-Score-Comparison-Heart-/blob/main/Supplemental%20Figure%201%3A%20Chicago%20plots.Rmd
+
+
+# Efigure 9a
+
+```{r}
+cuminc_obj <- tidycmprsk::cuminc(Surv(time = time, event = as.factor(status)) ~ ADI_decile, 
+                                 data = ADI_reduced)
+data = cuminc_obj$tidy %>% filter(strata == 1)
+
+ggplot(data, aes(x = time/365.25, y = estimate, color = outcome))+
+  geom_line() +  # Adjust line thickness
+  theme_bw() + 
+  scale_y_continuous(limits = c(0,1)) +
+  labs(color = "Outcome",
+       x = "Years on Waitlist",
+         y = "Cumulative Incidence",
+         title = "Cumulative incidence of each outcome ADI Decile 1") +
+  theme(
+    text = element_text(size = 14, family = "sans", face = "plain"),  # global font size & no bold
+    plot.title = element_text(size = 16, face = "plain", hjust = 0.5),  # larger title, centered
+    axis.title = element_text(size = 14, face = "plain"),
+    axis.text = element_text(size = 12, face = "plain"),
+    legend.title = element_text(size = 13, face = "plain"),
+    legend.text = element_text(size = 12, face = "plain")
+  )
+
+  ggsave("ADI_outcomes_1.png", width = 10, height = 7, dpi = 400)
+```
+# Efigure 9b
+
+```{r}
+cuminc_obj <- tidycmprsk::cuminc(Surv(time = time, event = as.factor(status)) ~ ADI_decile, 
+                                 data = ADI_reduced)
+data = cuminc_obj$tidy %>% filter(strata == 10)
+
+ggplot(data, aes(x = time/365.25, y = estimate, color = outcome))+
+  geom_line() +  # Adjust line thickness
+  theme_bw() + 
+  scale_y_continuous(limits = c(0,1)) +
+  labs(color = "Outcome",
+       x = "Years on Waitlist",
+         y = "Cumulative Incidence",
+         title = "Cumulative incidence of each outcome ADI Decile 10") +
+  theme(
+    text = element_text(size = 14, family = "sans", face = "plain"),  # global font size & no bold
+    plot.title = element_text(size = 16, face = "plain", hjust = 0.5),  # larger title, centered
+    axis.title = element_text(size = 14, face = "plain"),
+    axis.text = element_text(size = 12, face = "plain"),
+    legend.title = element_text(size = 13, face = "plain"),
+    legend.text = element_text(size = 12, face = "plain")
+  )
+
+  ggsave("ADI_outcomes_10.png", width = 10, height = 7, dpi = 400)
+```

@@ -1,0 +1,859 @@
+---
+title: "Data Prep"
+author: "Olivia"
+date: "2024-08-05"
+output: html_document
+---
+
+##load libraries, data
+
+```{r}
+rm(list = ls())
+library(tidyverse)
+library(lubridate)
+library(haven)
+library(readxl)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(DiagrammeR)
+library(DiagrammeRsvg)
+library(rsvg)
+library(glue)
+library(gtsummary)
+library(cardx)
+
+setwd("C:/Users/mwhite10/Downloads")
+data <- read_sas("./pubsaf2403/cand_kipa.sas7bdat")
+stathist = read_sas("./pubsaf2403/stathist_kipa.sas7bdat")
+ADI <- read_csv("US_2022_ADI_Census_Block_Group_v4_0_1.csv")
+SVI <- read_csv("SVI_2022_US.csv")
+SVM <- read_csv("SVM_ZIPCODE_SCORES_All States_All Counties_2024-06-24.csv")
+DCI <- read_xlsx("dci-2017-2021-scores-only (2).xlsx")
+zip_crosswalk <- read_excel("ZIP_TRACT_032024 (1).xlsx")
+cand_zip <- read_sas("canzip2403.sas7bdat")
+```
+
+##set cohort - start and end dates, kidney (+/- pancreas) only, adults only
+
+```{r}
+start_date <- as.Date('2014-01-01')
+end_date <- as.Date('2022-12-31')
+filt_date <- data %>% filter(between(CAN_LISTING_DT, start_date, end_date))
+filt_date_KIKP <- filt_date %>% filter(WL_ORG %in% c("KI", "KP"))
+filt_date_KIKP %>% filter(CAN_AGE_AT_LISTING < 18) ##pediatric candidates
+filt_date_KIKP_adult <- filt_date_KIKP %>% filter(CAN_AGE_AT_LISTING >= 18)
+
+rm(filt_date, filt_date_KIKP, data)
+```
+
+##from here down based on Kevin Zhang's code
+##establish waitlist_end_date - transplant date, removal date, last inactive date (if after last active date), last active date
+
+```{r}
+df_cand_kipa <- filt_date_KIKP_adult %>% ##df_cand_kipa has same cohort, adds waitlist_end_date column
+  mutate(waitlist_end_date = case_when(
+    is.na(REC_TX_DT) == FALSE ~ REC_TX_DT, ##look at transplant date first
+    is.na(CAN_REM_DT) == FALSE ~ CAN_REM_DT, ##then look at removal date
+    is.na(CAN_LAST_INACT_STAT_DT) == FALSE & CAN_LAST_INACT_STAT_DT > CAN_LAST_ACT_STAT_DT ~ CAN_LAST_INACT_STAT_DT,##then inactive date if after last active date
+    !is.na(CAN_LAST_ACT_STAT_DT) ~ CAN_LAST_ACT_STAT_DT, ##then last active
+    is.na(CAN_LAST_ACT_STAT_DT) & !is.na(CAN_LAST_INACT_STAT_DT) ~ CAN_LAST_INACT_STAT_DT,
+    TRUE ~ CAN_LAST_ACT_STAT_DT)) ##if all else fails, use last active date
+
+rm(filt_date_KIKP_adult)
+
+df_cand_kipa = df_cand_kipa %>%
+  group_by(PERS_ID) %>%
+  mutate(all_centers = paste(unique(CAN_LISTING_CTR_CD), collapse = ",")) %>% 
+  ungroup()
+
+```
+
+##single registrations - new columns num_list, min_list_date, wait_time, outcome
+
+```{r}
+single_registrations <- df_cand_kipa %>%
+  group_by(PERS_ID) %>% ##grouping by PERS_ID - ?
+  mutate(num_list = n()) %>%
+  filter(num_list == 1) %>%
+  ungroup() %>%
+  mutate(min_list_date = CAN_LISTING_DT,  
+         wait_time = waitlist_end_date - min_list_date, ##using end dates established in last code chunk
+         outcome = case_when(
+           DON_TY == "C" ~ "DDKT",
+           DON_TY == "L" ~ "LDKT",
+           !is.na(CAN_REM_CD) ~ "removed/died",  ##do we want all other CAN_REM_CD codes here? or just 8 and 13 (like used to define the outcome below)
+           TRUE ~ "censored"
+         ))
+```
+
+##multiple registrations - new columns num_list, list_type (concurrent or sequential), num_tx; fills missing REC_TX_DT
+
+```{r}
+multiple_registrations <- df_cand_kipa %>%
+  filter(!PX_ID %in% single_registrations$PX_ID) %>%
+  group_by(PERS_ID) %>%
+  arrange(PERS_ID, CAN_LISTING_DT) %>%
+  mutate(num_list = n())
+
+candidates_w_multiple_registrations <- multiple_registrations %>% pull(PERS_ID) %>% unique() %>% length() ##number of candidates with multiple registrations
+
+avg_num_registrations_multiple <- mean(multiple_registrations %>% group_by(PERS_ID) %>% filter(row_number() == 1) %>% pull(num_list)) ##for candidates with multiple registrations, the average number of registrations
+
+multiple_registrations <- multiple_registrations %>%
+  mutate(list_type = case_when(
+    CAN_LISTING_DT < lag(waitlist_end_date) ~ "concurrent",
+    waitlist_end_date > lead(CAN_LISTING_DT) ~ "concurrent",
+    TRUE ~ "sequential")) %>%
+  mutate(REC_TX_DT = as.Date(REC_TX_DT)) %>%
+  mutate(num_tx = length(unique(na.omit(REC_TX_DT)))) %>%
+  fill(REC_TX_DT, .direction='downup') ##this line is causing issues with negative dial_time values
+```
+
+```{r}
+multiple_registrations <- multiple_registrations[order(multiple_registrations$PERS_ID, multiple_registrations$waitlist_end_date), ] ##orders by PERS_ID then waitlist_end_date
+
+##multiple registrations - number sequential transplants, correct concurrent listing transplant dates
+
+multiple_registrations$transplant_num <- 1 ##new column transplant_num, setting all at 1 for now
+for (i in 2:nrow(multiple_registrations)) {
+  if (!is.na(multiple_registrations$PERS_ID[i-1]) && 
+      !is.na(multiple_registrations$PERS_ID[i]) && 
+      !is.na(multiple_registrations$REC_TX_DT[i-1]) && 
+      !is.na(multiple_registrations$REC_TX_DT[i]) &&
+      multiple_registrations$PERS_ID[i-1] == multiple_registrations$PERS_ID[i] &&
+      multiple_registrations$REC_TX_DT[i-1] != multiple_registrations$REC_TX_DT[i]) {
+    
+    multiple_registrations$transplant_num[i] = multiple_registrations$transplant_num[i-1] + 1
+  }
+}
+
+for (i in 2:nrow(multiple_registrations)) {
+  if (!is.na(multiple_registrations$PERS_ID[i-1]) && 
+      !is.na(multiple_registrations$PERS_ID[i]) && 
+      multiple_registrations$PERS_ID[i-1] == multiple_registrations$PERS_ID[i] &&
+      !is.na(multiple_registrations$transplant_num[i-1]) && 
+      multiple_registrations$transplant_num[i-1] != multiple_registrations$transplant_num[i] &&
+      multiple_registrations$transplant_num[i-1] != 1) {
+    
+    multiple_registrations$transplant_num[i] = multiple_registrations$transplant_num[i-1]
+  }
+}
+
+multiple_registrations$transplant_num[multiple_registrations$list_type == 'sequential'] <- 0 ##when list_type is sequential, transplant_num is set to 0. I still don't understand this step either.
+
+for(i in 1:(nrow(multiple_registrations)-1)) { ##loop from second to lat row
+  if(multiple_registrations$PERS_ID[i] == multiple_registrations$PERS_ID[i+1] &
+     multiple_registrations$list_type[i] == 'concurrent' & multiple_registrations$list_type[i+1] == 'concurrent' &
+     !is.na(multiple_registrations$REC_TX_DT[i]) & !is.na(multiple_registrations$REC_TX_DT[i+1]) &
+     multiple_registrations$REC_TX_DT[i] < multiple_registrations$REC_TX_DT[i+1] ) {
+    
+    multiple_registrations$REC_TX_DT[i] <- multiple_registrations$REC_TX_DT[i+1] ##if PERS_ID is the same as the NEXT row, both have concurrent listings, transplant dates for both are not NA, and transplant date is earlier than the next row's transplant date - update to next row's transplant date
+  }}
+
+sequential_lists <- multiple_registrations %>%
+  filter(list_type == "sequential") %>%
+  mutate(min_list_date = CAN_LISTING_DT,
+         wait_time = waitlist_end_date - min_list_date,
+         outcome = case_when(
+           DON_TY == "C" ~ "DDKT",
+           DON_TY == "L" ~ "LDKT",
+           is.na(CAN_REM_CD) == FALSE ~ "removed/died", ##again, should this be all CAN_REM_CD? or just 8 and 13 (since we included the rest in censored)
+           TRUE ~ "censored"
+         ))  ##same thing as done above for single registrations
+
+max_retransplants <- max(multiple_registrations$transplant_num) ##highest number of transplants for a single person
+
+multiple_registrations <- multiple_registrations %>% ##for candidates with multiple registrations, adds columns min_list_date, wait_time
+  group_by(PERS_ID, transplant_num) %>%
+  mutate(min_list_date = min(CAN_LISTING_DT, na.rm=T),
+         wait_time = waitlist_end_date - min_list_date)
+
+multiple_registrations <- multiple_registrations %>% mutate
+
+collapsed_concurrent_registrations <- NULL ##establishes object to store coming data
+for(i in 1:max_retransplants) { ##loop from first row to max_transplants
+  
+  collapsed_concurrent_registrations <- rbind(collapsed_concurrent_registrations, 
+        
+  multiple_registrations %>%
+    filter(list_type == "concurrent" & transplant_num == i) %>% ##filters for concurrent listings where translpant_num is equal to current value of i (?)
+    mutate(DON_TY = ifelse(DON_TY == "", NA, DON_TY),
+           last_wait_date = max(waitlist_end_date, na.rm = TRUE)) %>% ##if DON_TY is empty, fill with NA, set last_wait_date to waitlist_end_date (why?)
+    fill(REC_TX_DT, .direction = "up") %>%
+    fill(DON_TY, .direction = "up") %>%
+    fill(DONOR_ID, .direction = "up") %>%
+    fill(CAN_REM_CD, .direction = "up") %>% ##fills missing values upwards
+    mutate(wait_time = case_when(
+      is.na(REC_TX_DT) == FALSE & transplant_num != '0' ~ REC_TX_DT- min_list_date, ### Ignore non-transplanted rows
+      TRUE ~ last_wait_date - min_list_date),
+      outcome = case_when(
+        DON_TY == "C" ~ "DDKT",
+        DON_TY == "L" ~ "LDKT",
+        is.na(CAN_REM_CD) == FALSE ~ "removed/died", ##same question - CAN_REM_CD should be all? or just 8, 13?
+        TRUE ~ "censored")   ##does the same we already did for single registrations and sequential listings
+    ) %>%
+    select(-c(waitlist_end_date, CAN_LISTING_DT, CAN_REM_DT)) %>% ##drops columns waitlist_end_date, CAN_LISTING_DT, CAN_REM_DT (just for cleanliness?)
+    filter(row_number() ==1) %>% ##for concurrent listings, keeps only first row 
+    
+    mutate(last_wait_date = case_when(
+      REC_TX_DT < last_wait_date ~ REC_TX_DT,
+      TRUE ~last_wait_date)))}
+```
+
+##recreate CAN_LISTING_DT - to fix issue of NA values later on
+
+```{r}
+collapsed_concurrent_registrations <- collapsed_concurrent_registrations %>% mutate(CAN_LISTING_DT = min_list_date)
+```
+
+##recombine separated data frames
+
+```{r}
+df_cand_kipa <- bind_rows(single_registrations %>% ungroup(), 
+                          sequential_lists %>% ungroup(), 
+                          collapsed_concurrent_registrations %>% ungroup()) ##puts data all back together
+
+df_cand_kipa %>% filter(is.na(CAN_LISTING_DT))
+```
+
+##establish final data frames. 3 outcomes = received deceased donor kidney transplant (unique_transplant), died or removed due to deterioration (rem_death_deterioration), censored (censored_total) 
+
+```{r}
+unique_candidates <- df_cand_kipa %>% pull(PERS_ID) %>% n_distinct()
+
+unique_listings <- df_cand_kipa %>% nrow()
+
+unique_transplant <- df_cand_kipa %>% filter(outcome == "DDKT")
+
+rem_death_deterioration <- df_cand_kipa %>% filter(outcome == "removed/died") %>% filter(CAN_REM_CD %in% c(8, 13)) ##fixes my previous questions by only including 8 and 13 from removed/died classification
+
+censored_total <- df_cand_kipa %>% filter(outcome %in% c("removed/died", "censored", "LDKT")) %>% filter(!(CAN_REM_CD %in% c(8, 13)) | (outcome == "LDKT"))
+```
+
+##break down censored groups
+
+```{r}
+ldkt <- df_cand_kipa %>% filter(outcome == "LDKT")
+
+rem_other_reason <- df_cand_kipa %>% filter(outcome %in% c("censored", "removed/died")) %>% filter(!(CAN_REM_CD %in% c(8,13)))
+
+rm(collapsed_concurrent_registrations, sequential_lists, single_registrations, i)
+```
+
+##creates dialysis_time_at_list (in years), 0 if preemptively listed; preemptive means preemptive_listing = 1 and dialysis = 0
+```{r}
+df_cand_kipa <- df_cand_kipa %>% 
+  mutate(
+    dialysis_time_at_list = case_when(
+      is.na(CAN_DIAL_DT) | as.Date(min_list_date) < as.Date(CAN_DIAL_DT) ~ 0,
+      TRUE ~ as.numeric(difftime(min_list_date, CAN_DIAL_DT, units = 'weeks')) / 52.25),
+    preemptive_listing = case_when(
+      dialysis_time_at_list == 0 ~ 1,
+      TRUE ~ 0),
+    dialysis = case_when(
+      preemptive_listing == 0 ~ 1,
+      TRUE ~ 0),
+    living_donor = ifelse(outcome == "LDKT", 1, 0)
+    )
+
+
+```
+
+
+```{r}
+
+df_cand_kipa <- df_cand_kipa %>%
+  mutate(
+    diabetes_cat = case_when(
+      CAN_DIAB_TY == '2' | CAN_DIAB_TY == '3' | CAN_DIAB_TY == '4' | CAN_DIAB_TY == '5' ~ 1, ##1 represents presence of diabetes
+      TRUE ~ 0)) ##only returns 179,427 rows - only patients that received transplant
+```
+
+
+
+```{r}
+
+df_cand_kipa <- df_cand_kipa %>%
+  mutate(race = case_when(
+    CAN_RACE_SRTR == 'WHITE' & CAN_ETHNICITY_SRTR == 'NLATIN' ~ 'White',
+    CAN_RACE_SRTR == 'BLACK' & CAN_ETHNICITY_SRTR == 'NLATIN' ~ 'Black_AA',
+    CAN_RACE_SRTR == 'NATIVE' & CAN_ETHNICITY_SRTR == 'NLATIN'  ~ 'American_Indian',
+    CAN_RACE_SRTR == 'ASIAN' & CAN_ETHNICITY_SRTR == 'NLATIN'  ~ 'Asian',
+    CAN_RACE_SRTR == 'PACIFIC' & CAN_ETHNICITY_SRTR == 'NLATIN'  ~ 'Pacific_Islander',
+    CAN_RACE_SRTR == 'MULTI' & CAN_ETHNICITY_SRTR == 'NLATIN' ~ 'Multi',
+    CAN_RACE_SRTR == 'NA' & CAN_ETHNICITY_SRTR == 'NLATIN' ~ 'Unknown',
+    CAN_RACE_SRTR == '2000' & CAN_ETHNICITY_SRTR == 'LATINO' ~ 'Hispanic',
+    TRUE ~ 'Other')) %>%
+  
+  mutate(sex = case_when(
+    CAN_GENDER == 'M' ~ 'Male',  ##creates sex variable
+    CAN_GENDER == 'F' ~ 'Female'),
+    
+    diabetes = factor(diabetes_cat, levels=c(0,1)),
+    dialysis = factor(dialysis, levels=c(0,1)),
+    preemptive_listing = factor(preemptive_listing, levels=c(0,1)),
+    previous_TX = factor(CAN_PREV_TX, levels=c(0,1)),
+    age = as.numeric(CAN_AGE_AT_LISTING)
+  ) %>%
+  
+  mutate(
+    age_group = case_when(
+      age <= 24 ~ '18-24',
+      age > 24 & age <= 29 ~ '25-29',
+      age > 29 & age <= 39 ~ '30-39',
+      age > 39 & age <= 49 ~ '40-49',
+      age > 49 & age <= 59 ~ '50-59',
+      age > 59 & age <= 69 ~ '60-69', ##establishes age groups
+      TRUE ~ '>70'))
+
+df_cand_kipa$age_group <- factor(df_cand_kipa$age_group, levels=c('18-24', '25-29', '30-39',
+                                                                  '40-49', '50-59', '60-69', '>70'))  ##makes age groups factor variables
+df_cand_kipa$race <- factor(df_cand_kipa$race, levels=c('White', 'American_Indian', 
+                                                        'Asian', 'Black_AA', 'Hispanic',
+                                                        'Other', 'Pacific_Islander', 'Unknown')) ##makes race a factor variable
+### Initial variable selection
+df_cand_kipa <- df_cand_kipa %>%
+  select(PX_ID, PERS_ID, living_donor, 
+         outcome, list_type, waitlist_end_date, wait_time, min_list_date, last_wait_date,
+         age, age_group, sex, race, diabetes, dialysis, dialysis_time_at_list,
+         preemptive_listing, previous_TX,
+         CAN_LISTING_DT, CAN_DIAL_DT, CAN_REM_CD, CAN_REM_DT, REC_TX_DT, 
+         CAN_LAST_INACT_STAT_DT, CAN_LAST_ACT_STAT_DT, 
+         CAN_DEATH_DT, PERS_SSA_DEATH_DT, PERS_OPTN_DEATH_DT, CAN_RACE_SRTR, CAN_AGE_AT_LISTING, CAN_ETHNICITY_SRTR, CAN_TIEBREAKER_DT, CAN_GENDER, CAN_ABO, CAN_LISTING_CTR_CD, all_centers, CAN_PRIMARY_PAY) ##only leaves in necessary variables
+
+
+### A death indicator variable 
+df_cand_kipa <- df_cand_kipa %>% 
+  mutate(death = case_when(
+    CAN_REM_CD == '8' | !is.na(CAN_DEATH_DT) | !is.na(PERS_SSA_DEATH_DT) | !is.na(PERS_OPTN_DEATH_DT) ~ 1,
+    TRUE ~ 0))
+
+# If transplanted, transplanted takes priority
+df_cand_kipa$death[df_cand_kipa$outcome == '>20% KDPI DDKT' | df_cand_kipa$outcome == 'DDKT' |
+                   df_cand_kipa$outcome == 'LDKT' |  df_cand_kipa$outcome == 'top 20% KDPI DDKT'] <- 0
+```
+
+
+
+
+
+
+
+##ADI
+
+```{r ADI}
+
+ADI$FIPS_11_digit <- substr(ADI$FIPS, 1,11) ##first 11 digits of FIPS column make new column
+
+
+ADI <- left_join(ADI,
+                 select(zip_crosswalk, TRACT, ZIP),
+                 by = c("FIPS_11_digit" = "TRACT")) ##merging TRACT and ZIP from crosswalk data with ADI. matches FIPS_11_digit with TRACT.
+
+
+check_numeric_ADI <- unique(ADI$ADI_NATRANK[!is.na(ADI$ADI_NATRANK) & !grepl("^\\d+$", ADI$ADI_NATRANK)]) ##to find non-numeric NATRANK values
+
+ADI <- ADI %>%
+  group_by(ZIP) %>%
+  mutate(ADI_percentile = mean(as.numeric(ADI_NATRANK), na.rm = TRUE)) ##new column mean_ADI. ignores NA values
+
+ADI <- distinct(ADI, ZIP, .keep_all = T) 
+
+
+```
+
+##SVI
+
+```{r}
+
+
+SVI <- left_join(SVI, 
+                 select(zip_crosswalk, TRACT, ZIP), 
+                 by = c("FIPS" = "TRACT")) ##join  TRACT and ZIP from SVI_crosswalk with SVI, matching FIPS to tract.
+
+SVI <- SVI %>% 
+  select(ZIP, RPL_THEMES) 
+
+SVI <- SVI %>% 
+  mutate(RPL_THEMES = case_when(RPL_THEMES < 0 ~ NA, .default = RPL_THEMES)) 
+
+SVI <- SVI %>% 
+  group_by(ZIP) %>% 
+  mutate(SVI_percentile = mean(as.numeric(RPL_THEMES*100), na.rm = T),
+         median_SVI = median(as.numeric(RPL_THEMES*100), na.rm = T))
+
+SVI <- distinct(SVI, ZIP, .keep_all = T)
+```
+
+## SVM
+why the second line? if ZIPCODE is already 5 digits?
+```{r}
+SVM$zipcode <- substr(SVM$ZIPCODE, start = 1, stop = 5) 
+```
+
+##DCI
+```{r}
+DCI <- DCI %>%
+  mutate(zip = as.character(`Zip Code`), ##new column "zip"
+         dci_percentile = `2017-2021 Final Distress Score`) ##new column dci_percentile which is exactly the distress score
+
+DCI <- DCI %>%
+  mutate(`Zip Code` = as.character(`Zip Code`)) %>%    ##gives 4-digit zips a leading zero
+  mutate(`Zip Code` = if_else(str_length(`Zip Code`) == 4,
+                              str_pad(`Zip Code`, width = 5, side = "left", pad = "0"),
+                              `Zip Code`))
+```
+
+##Assign deprivation indicies to candidate zip code - credit to alex wang
+
+```{r}
+
+cand_zip$ZIP = substr(cand_zip$CAN_PERM_ZIP, start = 1, stop = 5) ##extracts first 5 digits from CAN_PERM_ZIP and creates new column ZIP
+
+cand_zip <- cand_zip %>%
+  left_join(select(SVM, ZIPCODE, SVM_SCORE, SVM_PERCENTILE),
+                      by = c("ZIP" = "ZIPCODE")) ##join ZIPCODE, SVM_SCORE, SVM_PERCENTILE from SVM_ZIP with cand_zip. merge ZIP and ZIPCODE
+cand_zip <- left_join(cand_zip, select(ADI, ADI_percentile, ZIP), by = c("ZIP" = "ZIP"))
+cand_zip <- left_join(cand_zip, select(DCI, dci_percentile, zip), by = c("ZIP" = "zip"))
+cand_zip <-left_join(cand_zip, SVI, by = c("ZIP" = "ZIP"))
+
+```
+
+```{r}
+rm(ADI, ADI_crosswalk, DCI, SVI, SVI_crosswalk, SVM, check_numeric_ADI)
+```
+
+##start with our established cohort, add column for preemptive listing
+
+```{r}
+df_cand_kipa <- df_cand_kipa %>%
+  mutate(preemp = case_when(
+    CAN_DIAL_DT > CAN_LISTING_DT ~ TRUE,
+    is.na(CAN_DIAL_DT) ~ TRUE,
+    is.na(CAN_LISTING_DT) & CAN_DIAL_DT > CAN_TIEBREAKER_DT ~ TRUE,
+    TRUE ~ FALSE
+  ))
+
+df_cand_kipa <- df_cand_kipa %>%
+  mutate(dial_time = NA) %>%  # Initialize dial_time with NA
+  mutate(dial_time = case_when(
+    preemp == FALSE ~ CAN_LISTING_DT - CAN_DIAL_DT,
+    TRUE ~ dial_time  # Keep existing dial_time for preemp == TRUE
+  ))
+
+```
+
+```{r}
+df_cand_kipa %>% select(PX_ID, preemp, CAN_LISTING_DT, CAN_TIEBREAKER_DT, CAN_DIAL_DT, dial_time) %>% filter(is.na(dial_time))
+df_cand_kipa %>% select(PX_ID, preemp, CAN_LISTING_DT, CAN_TIEBREAKER_DT, CAN_DIAL_DT) %>% filter(is.na(preemp))
+```
+
+
+
+```{r}
+df_cand_kipa_w_scores <- left_join(df_cand_kipa, select(cand_zip, SVM_SCORE, SVM_PERCENTILE, PX_ID, SVI_percentile, ADI_percentile, dci_percentile),
+                              by = c("PX_ID" = "PX_ID"))
+
+n_distinct(df_cand_kipa_w_scores$PX_ID)
+```
+
+
+
+```{r}
+df_cand_kipa_w_scores <- df_cand_kipa_w_scores %>%
+  mutate(SVM_PERCENTILE = as.numeric(as.character(SVM_PERCENTILE)),
+         SVI_percentile = as.numeric(as.character(SVI_percentile)),
+         ADI_percentile = as.numeric(as.character(ADI_percentile)),
+         dci_percentile = as.numeric(as.character(dci_percentile)))
+
+df_cand_kipa_w_scores <- df_cand_kipa_w_scores %>% 
+  group_by(PX_ID) %>% ##why group by PX_ID? shouldn't they all be unique?
+  mutate(SVM_decile = cut(SVM_PERCENTILE, c(-Inf, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100), labels = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10")),
+                                                                    SVI_decile = cut(SVI_percentile, c(-Inf, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100), labels = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10")),
+                                                                    ADI_decile = cut(ADI_percentile,c(-Inf, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100), labels = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10")),
+                                                                    DCI_decile = cut(dci_percentile,c(-Inf, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100), labels = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10")))
+
+df_cand_kipa_w_scores <- df_cand_kipa_w_scores %>%
+  mutate(svm_decile = as.numeric(SVM_decile),
+        svi_decile = as.numeric(SVI_decile),
+        adi_decile = as.numeric(ADI_decile),
+        dci_decile = as.numeric(DCI_decile))
+
+```
+
+##df_cand_kipa_w_scores is now the data frame that will be used for major analyses.
+
+##add a column with race as a factor 
+
+```{r}
+df_cand_kipa_w_scores$can_race_factor <- as.factor(df_cand_kipa_w_scores$CAN_RACE_SRTR)
+df_cand_kipa_w_scores$SVM_decile <- as.factor(df_cand_kipa_w_scores$SVM_decile)
+
+
+df_cand_kipa_w_scores$can_race_factor <- relevel(df_cand_kipa_w_scores$can_race_factor, ref = "WHITE")
+df_cand_kipa_w_scores$SVM_decile <- relevel(df_cand_kipa_w_scores$SVM_decile, ref = "5")
+```
+
+##establish columns start_date, transplant_date, removal_date, last_active_date, last_inactive_date, death_date, death_date_max, transplant_time, death_time, removal_time
+
+```{r}
+df_cand_kipa_w_scores <- df_cand_kipa_w_scores %>%
+  mutate(
+    start_date = as.Date(ifelse(is.na(CAN_LISTING_DT), CAN_TIEBREAKER_DT, CAN_LISTING_DT)), ##added by edgar, takes care of 33,093 survival_time == NA values
+    transplant_date = as.Date(REC_TX_DT),
+    removal_date = as.Date(CAN_REM_DT),
+    last_active_date = as.Date(CAN_LAST_ACT_STAT_DT),
+    last_inactive_date = as.Date(CAN_LAST_INACT_STAT_DT),
+    death_date = as.Date(CAN_DEATH_DT),
+    death_date_max = pmax(CAN_DEATH_DT, PERS_SSA_DEATH_DT, PERS_OPTN_DEATH_DT, na.rm = T)) %>% ##do we want max of these? or is PERS_OPTN_DEATH_DT most complete?
+  mutate(transplant_time = ifelse(!is.na(transplant_date),
+      as.numeric(transplant_date - start_date, units = 'days'), NA)) %>%
+  mutate(death_time = ifelse(!is.na(death_date_max),
+      as.numeric(death_date_max - start_date, units = 'days'), NA)) %>%
+  mutate(removal_time = as.numeric(
+      pmax(removal_date, last_active_date, last_inactive_date, na.rm = T) - start_date,
+      units = 'days'))
+
+n_distinct(df_cand_kipa_w_scores$PX_ID)
+```
+
+##add column survival_time with the minimum of transplant, death, and removal time. cap survival time at 5 years
+
+```{r}
+df_cand_kipa_w_scores <- df_cand_kipa_w_scores %>%
+  mutate(
+    transplant_time = ifelse(transplant_time < 0, NA, transplant_time),
+    death_time = ifelse(death_time < 0, NA, death_time),
+    removal_time = ifelse(removal_time < 0, NA, removal_time),
+    survival_time = pmin(transplant_time, death_time, removal_time, na.rm = TRUE),
+    survival_time = case_when(
+      survival_time > 1826 ~ 1826,
+      .default = survival_time ## I noticed if one of the 3 outcomes was negative but another was positive in some cases it was using the negative one. this should take care of that? Took us from 70 negative survival_times to 0...but back up from 0 to 8 survival_times == NA. this is because if a survival_time was going to be negative it replaced it with NA
+    )
+  )
+
+```
+
+##new column classifiying outcomes - numbers match from when we defined cohort except one extra in "transplant"
+
+```{r}
+df_cand_kipa_w_scores <- df_cand_kipa_w_scores %>% 
+  mutate(status = case_when(
+    outcome == "DDKT" & survival_time < 1826 ~ 1,  # Transplanted
+    outcome == "removed/died" & CAN_REM_CD == 8 & survival_time < 1826 ~ 2,  # Removed/died due to deterioration
+    outcome == "LDKT" & survival_time < 1826 ~ 3,  #censored
+    outcome == "removed/died" & CAN_REM_CD != 8 & survival_time < 1826 ~ 4,
+    TRUE ~ 0  # Default to 0 for any other cases
+  ))
+
+df_cand_kipa_w_scores$status <- factor(df_cand_kipa_w_scores$status,
+                                       levels = c(0,1,2,3,4),
+                                       labels = c("censor", "DDKT", "death", "LDKT", "removed"))
+
+table(df_cand_kipa_w_scores$status)
+```
+
+##add transplant_outcome and death_outcome columns
+
+```{r}
+df_cand_kipa_w_scores <- df_cand_kipa_w_scores %>%
+  mutate(transplant_outcome = case_when(
+    survival_time == 1826 ~ 0,
+    status == "censor" ~ 0,
+    status == "DDKT" ~ 1,
+    .default = 0),
+    death_outcome = case_when(
+      survival_time == 1826 & !(CAN_REM_CD %in% c(8,13)) ~ 0,
+      status == "censor" ~ 0,
+      status == "death" ~ 1,
+      .default = 0
+    ))
+```
+
+##add sex , latino, status_numeric columns (?)
+
+```{r}
+df_cand_kipa_w_scores <- df_cand_kipa_w_scores %>%
+  mutate(sex = case_when(
+    CAN_GENDER == "M" ~ 1,
+    CAN_GENDER == "F" ~ 0),
+    latino = case_when(
+      CAN_ETHNICITY_SRTR == "LATINO" ~1,
+      CAN_ETHNICITY_SRTR == "NLATIN" ~0,
+      .default = NA),
+    status_numeric = case_when(
+      status == "censor" ~ 0,
+      status == "DDKT" ~ 1,
+      status == "death" ~ 2,
+      status == "LDKT" ~ 3,
+      status == "removed" ~ 4
+    ))
+```
+
+```{r}
+
+#there was a duplicated row, take out
+df_cand_kipa_w_scores = df_cand_kipa_w_scores %>% distinct()
+table(df_cand_kipa_w_scores$status)
+```
+
+
+```{r}
+
+
+strobe = grViz(
+  glue("digraph my_flowchart {{ 
+      graph[splines = ortho]
+      node [fontname = Helvetica, shape = box, width = 4, height = 1]
+      
+        // Main node
+        node1[label = <Kidney Transplant Candidate Registrations, 2014-2022 (n = 362,752)>]
+                
+        // Invisible blank node to adjust positioning
+        blank1[label = '', width = 0.01, height = 0.01]
+        
+        // Excluded criteria (shift to left)
+        excluded1[label = <Pediatric Candidates (n = 9,513)>]
+        
+        // Connect Total available patients to blank1 (no arrow head)
+        node1 -> blank1[dir = none];
+        
+        // Connect blank1 to excluded1 (on the left side)
+        excluded1 -> blank1[dir = back, minlen = 2];
+        
+        // Keep excluded1 on the left of blank1
+        {{ rank = same; blank1 excluded1 }}
+
+        // Blank node for the next exclusion step
+        blank2[label = '', width = 0.01, height = 0.01]
+        
+        // Excluded due to missing values (same rank)
+        excluded2[label = <Multiple Listings (n = 40,272)>]
+        
+        // Connect blank1 to blank2 (no arrow head)
+        blank1 -> blank2[dir = none];
+        
+        // Connect blank2 to excluded2 (right side)
+        blank2 -> excluded2[minlen = 2];
+        
+        // Keep blank2 and excluded2 aligned in the same rank
+        {{ rank = same; blank2 excluded2 }}
+        
+        // Connect blank2 to next step (included for analysis)
+        node2[label = <Adult Kidney Transplant Candidate Registrations (n = 312,967)>]
+        blank2 -> node2;
+        
+        // Connect to data linking
+        node3[label = <Received Kidney Transplant (DDKT) (n = 114,103)>]
+        node4[label = <Died (n = 25,503)>]
+        node5[label = <Censored (n = 68,533)>]
+        node6[label = <Living Donor kidney transplant (n = 48,289)>]
+        node7[label = <Removed for Other Reason (n = 56,538)>]
+        
+        node2 -> node3;
+        node2 -> node4;
+        node2 -> node5;
+        node2 -> node6;
+        node2 -> node7;
+     }}")
+)
+
+diagram = export_svg(strobe)
+strobe
+rsvg_png(charToRaw(diagram), "strobe_diagram.png",  width = 10000, height = 3000)
+```
+
+
+
+
+```{r}
+
+df_cand_kipa_w_scores = df_cand_kipa_w_scores %>% mutate(insurance = case_when(
+    CAN_PRIMARY_PAY %in% c(1) ~ "Private insurance",
+    CAN_PRIMARY_PAY %in% c(2, 3, 4, 5, 6, 7) ~ "Public insurance",
+    CAN_PRIMARY_PAY %in% c(8) ~ "Self",
+    CAN_PRIMARY_PAY %in% c(9) ~ "Donation",
+    CAN_PRIMARY_PAY %in% c(10) ~ "Free Care",
+    CAN_PRIMARY_PAY %in% c(11) ~ "Pending",
+    CAN_PRIMARY_PAY %in% c(12) ~ "Foreign Government",
+    CAN_PRIMARY_PAY %in% c(13) ~ "Medicare Unspecified",
+    CAN_PRIMARY_PAY %in% c(14) ~ "US/State Govt Agency",
+    CAN_PRIMARY_PAY %in% c(15) ~ "Unknown",
+    TRUE ~ "Other"))
+```
+
+## Table 1 comparing patients with missing index scores to patients with full information
+
+```{r}
+
+missing_summary <- function(data,  label) {
+  data %>%
+    droplevels() %>%
+    tbl_summary(
+      include = c(CAN_AGE_AT_LISTING, CAN_GENDER, CAN_RACE_SRTR, CAN_ETHNICITY_SRTR,  preemptive_listing, dial_time, insurance),
+
+      missing_text = "(Missing)"
+    ) %>%
+    modify_header(label = glue::glue("**{label}**")) %>%  # Dynamic header label                                # Bold significant p-values
+    bold_labels()                                         # Bold variable labels
+}
+
+# Creating summaries for each index
+svi_summary <- missing_summary(df_cand_kipa_w_scores %>% filter(is.na(SVI_decile)), "SVI")
+adi_summary <- missing_summary(df_cand_kipa_w_scores %>% filter(is.na(ADI_decile)), "ADI")
+svm_summary <- missing_summary(df_cand_kipa_w_scores %>% filter(is.na(SVM_decile)), "SVM")
+dci_summary <- missing_summary(df_cand_kipa_w_scores %>% filter(is.na(DCI_decile)), "DCI")
+non_missing_summary <- missing_summary(df_cand_kipa_w_scores %>% filter(!is.na(SVI_decile) & !is.na(ADI_decile) & !is.na(SVM_decile) & !is.na(DCI_decile)), "No Missing")
+
+
+# Combining all tables into one
+combined_summary <- tbl_merge(
+  list(non_missing_summary, svi_summary, adi_summary, svm_summary, dci_summary),
+  tab_spanner = c("**No Missing**", "**SVI**", "**ADI**", "**SVM**", "**DCI**")
+)
+
+# Display the combined summary
+combined_summary
+
+df_cand_kipa_w_scores %>% filter(!is.na(SVI_decile) & !is.na(ADI_decile) & !is.na(SVM_decile) & !is.na(DCI_decile))
+```
+
+
+
+
+
+
+
+
+
+```{r}
+# Adjust 0 length survival times
+df_cand_kipa_w_scores <- df_cand_kipa_w_scores %>% mutate(
+  survival_time = ifelse(survival_time == 0, 1, survival_time)
+)
+```
+
+
+
+```{r}
+df_cand_kipa_w_scores <- df_cand_kipa_w_scores %>%
+  mutate(SVM_PERCENTILE = as.numeric(as.character(SVM_PERCENTILE)), # SVM
+         SVI_percentile = as.numeric(as.character(SVI_percentile)), # SVI
+         ADI_percentile = as.numeric(as.character(ADI_percentile)), # ADI
+         dci_percentile = as.numeric(as.character(dci_percentile))) # DCI
+
+# Use median score from transplant center listed at for candidates missing score percentile
+df_cand_kipa_w_scores <- df_cand_kipa_w_scores %>%
+  group_by(CAN_LISTING_CTR_CD) %>% # Gather by transplant center
+  mutate(median_SVM = median(SVM_PERCENTILE, na.rm = T), # Median SVM of each transplant center
+         median_SVI = median(SVI_percentile, na.rm = T), # Median SVI of each transplant center
+         median_ADI = median(ADI_percentile, na.rm = T), # Median ADI of each transplant center
+         median_DCI = median(dci_percentile, na.rm = T), # Median DCI of each transplant center
+         SVM_PERCENTILE = ifelse(is.na(SVM_PERCENTILE), median_SVM, SVM_PERCENTILE), #conditional to input corresponding composite score value
+         SVI_percentile = ifelse(is.na(SVI_percentile), median_SVI, SVI_percentile),  #conditional to input corresponding composite score value
+         ADI_percentile = ifelse(is.na(ADI_percentile), median_ADI, ADI_percentile),  #conditional to input corresponding composite score value
+         dci_percentile = ifelse(is.na(dci_percentile), median_DCI, dci_percentile))  #conditional to input corresponding composite score value
+# Split Percentiles into Deciles
+df_cand_kipa_w_scores <- df_cand_kipa_w_scores %>% 
+  group_by(PX_ID) %>% 
+  mutate(SVM_decile = 
+           cut(SVM_PERCENTILE, c(-Inf, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100), labels = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10")),
+           SVI_decile = cut(SVI_percentile, c(-Inf, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100), labels = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10")),
+           ADI_decile = cut(ADI_percentile,c(-Inf, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100), labels = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10")),
+         DCI_decile = cut(dci_percentile,c(-Inf, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100), labels = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10")))
+
+# Turn deciles into factors
+df_cand_kipa_w_scores <- df_cand_kipa_w_scores %>% 
+  mutate(SVM_decile = as.factor(SVM_decile),
+        SVI_decile = as.factor(SVI_decile),
+        ADI_decile = as.factor(ADI_decile),
+        DCI_decile = as.factor(DCI_decile))
+```
+
+```{r}
+# blood type ) variable
+df_cand_kipa_w_scores <- df_cand_kipa_w_scores %>%
+  mutate(typeO = ifelse(CAN_ABO == "O", 1, 0))
+
+```
+
+
+```{r}
+
+# filter stathist to patients in dataframe
+stathist_list = stathist %>% filter(PX_ID %in% df_cand_kipa_w_scores$PX_ID & CAN_LISTING_DT == CANHX_BEGIN_DT)
+
+#recover cPRA from stathist
+df_cand_kipa_w_scores = df_cand_kipa_w_scores %>% left_join(stathist_list, select('CANHX_CPRA'), by = "PX_ID")
+
+#set missing values to 0
+df_cand_kipa_w_scores = df_cand_kipa_w_scores %>% mutate(
+  CPRA = ifelse(!is.na(CANHX_CPRA), 100* CANHX_CPRA, 0)
+)
+
+#establish cpra score based on policy cutoffs
+df_cand_kipa_w_scores = df_cand_kipa_w_scores %>% mutate(
+  cpra_score = case_when(
+    CPRA < 20 ~ "CPRA 0-20",
+    CPRA >= 20 & CPRA < 30 ~ "CPRA 20-29",
+    CPRA >= 30 & CPRA < 40 ~ "CPRA 30-39",
+    CPRA >= 40 & CPRA < 50 ~ "CPRA 40-49",
+    CPRA >= 50 & CPRA < 60 ~ "CPRA 50-59",
+    CPRA >= 60 & CPRA < 70 ~ "CPRA 60-69",
+    CPRA >= 70 & CPRA < 75 ~ "CPRA 70-74",
+    CPRA >= 75 & CPRA < 80 ~ "CPRA 75-79",
+    CPRA >= 80 & CPRA < 85 ~ "CPRA 80-84",
+    CPRA >= 85 & CPRA < 90 ~ "CPRA 85-89",
+    CPRA > 90 & CPRA < 95 ~ "CPRA 90-94",
+    CPRA >= 95 & CPRA < 96 ~ "CPRA 95",
+    CPRA >= 96 & CPRA < 97 ~ "CPRA 96", 
+    CPRA >= 97 & CPRA < 98 ~ "CPRA 97",
+    CPRA >= 98 & CPRA < 99 ~ "CPRA 98",
+    CPRA >= 99 & CPRA < 100 ~ "CPRA 99",
+    CPRA >= 100 ~ "CPRA 100"
+  )
+)
+df_cand_kipa_w_scores = df_cand_kipa_w_scores %>% mutate(
+  ldkt_outcome = ifelse(status == "LDKT", 1, 0)
+)
+
+```
+
+
+```{r}
+#create time variable
+
+
+df_cand_kipa_w_scores <- df_cand_kipa_w_scores %>%
+  mutate(time = as.numeric(survival_time))
+
+
+```
+
+
+```{r}
+#bin dialysis time
+df_cand_kipa_w_scores = df_cand_kipa_w_scores %>% mutate(
+  dial_time = ifelse(is.na(dial_time), 0, dial_time)
+) %>% mutate(
+  dial_time_bins = case_when(
+    dial_time == 0 ~ "Preemptive",
+    dial_time > 0 & dial_time <= 365 ~ "Less than 1 year", 
+    dial_time > 365 & dial_time <= 1095 ~ "1 to 3 years",
+    dial_time > 1095 ~ "Greater than 3 years"
+  )
+)
+
+```
+
+
+
+
+```{r}
+save(df_cand_kipa_w_scores, file = "df_cand_kipa_w_scores.RData")
+
+```
+
+
+
