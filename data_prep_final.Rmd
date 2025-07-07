@@ -26,7 +26,6 @@ library(cardx)
 setwd("C:/Users/mwhite10/Downloads")
 data <- read_sas("./pubsaf2403/cand_kipa.sas7bdat")
 stathist = read_sas("./pubsaf2403/stathist_kipa.sas7bdat")
-ADI <- read_csv("US_2022_ADI_Census_Block_Group_v4_0_1.csv")
 SVI <- read_csv("SVI_2022_US.csv")
 SVM <- read_csv("SVM_ZIPCODE_SCORES_All States_All Counties_2024-06-24.csv")
 DCI <- read_xlsx("dci-2017-2021-scores-only (2).xlsx")
@@ -340,50 +339,24 @@ df_cand_kipa$death[df_cand_kipa$outcome == '>20% KDPI DDKT' | df_cand_kipa$outco
 
 
 
-##ADI
-
-```{r ADI}
-
-ADI$FIPS_11_digit <- substr(ADI$FIPS, 1,11) ##first 11 digits of FIPS column make new column
-
-
-ADI <- left_join(ADI,
-                 select(zip_crosswalk, TRACT, ZIP),
-                 by = c("FIPS_11_digit" = "TRACT")) ##merging TRACT and ZIP from crosswalk data with ADI. matches FIPS_11_digit with TRACT.
-
-
-check_numeric_ADI <- unique(ADI$ADI_NATRANK[!is.na(ADI$ADI_NATRANK) & !grepl("^\\d+$", ADI$ADI_NATRANK)]) ##to find non-numeric NATRANK values
-
-ADI <- ADI %>%
-  group_by(ZIP) %>%
-  mutate(ADI_percentile = mean(as.numeric(ADI_NATRANK), na.rm = TRUE)) ##new column mean_ADI. ignores NA values
-
-ADI <- distinct(ADI, ZIP, .keep_all = T) 
-
-
-```
 
 ##SVI
 
 ```{r}
 
 
-SVI <- left_join(SVI, 
-                 select(zip_crosswalk, TRACT, ZIP), 
-                 by = c("FIPS" = "TRACT")) ##join  TRACT and ZIP from SVI_crosswalk with SVI, matching FIPS to tract.
+SVI <- SVI %>% 
+  select(FIPS, RPL_THEMES) 
 
 SVI <- SVI %>% 
-  select(ZIP, RPL_THEMES) 
+  mutate(RPL_THEMES = case_when(RPL_THEMES < 0 ~ NA, .default = RPL_THEMES),
+         SVI_percentile = RPL_THEMES*100,
+         ZIP = FIPS) 
 
-SVI <- SVI %>% 
-  mutate(RPL_THEMES = case_when(RPL_THEMES < 0 ~ NA, .default = RPL_THEMES)) 
 
-SVI <- SVI %>% 
-  group_by(ZIP) %>% 
-  mutate(SVI_percentile = mean(as.numeric(RPL_THEMES*100), na.rm = T),
-         median_SVI = median(as.numeric(RPL_THEMES*100), na.rm = T))
+SVI <- distinct(SVI, ZIP, .keep_all = T) %>% select(RPL_THEMES, ZIP)
 
-SVI <- distinct(SVI, ZIP, .keep_all = T)
+
 ```
 
 ## SVM
@@ -414,14 +387,13 @@ cand_zip$ZIP = substr(cand_zip$CAN_PERM_ZIP, start = 1, stop = 5) ##extracts fir
 cand_zip <- cand_zip %>%
   left_join(select(SVM, ZIPCODE, SVM_SCORE, SVM_PERCENTILE),
                       by = c("ZIP" = "ZIPCODE")) ##join ZIPCODE, SVM_SCORE, SVM_PERCENTILE from SVM_ZIP with cand_zip. merge ZIP and ZIPCODE
-cand_zip <- left_join(cand_zip, select(ADI, ADI_percentile, ZIP), by = c("ZIP" = "ZIP"))
 cand_zip <- left_join(cand_zip, select(DCI, dci_percentile, zip), by = c("ZIP" = "zip"))
 cand_zip <-left_join(cand_zip, SVI, by = c("ZIP" = "ZIP"))
 
 ```
 
 ```{r}
-rm(ADI, ADI_crosswalk, DCI, SVI, SVI_crosswalk, SVM, check_numeric_ADI)
+rm(DCI, SVI, SVI_crosswalk, SVM)
 ```
 
 ##start with our established cohort, add column for preemptive listing
@@ -452,7 +424,7 @@ df_cand_kipa %>% select(PX_ID, preemp, CAN_LISTING_DT, CAN_TIEBREAKER_DT, CAN_DI
 
 
 ```{r}
-df_cand_kipa_w_scores <- left_join(df_cand_kipa, select(cand_zip, SVM_SCORE, SVM_PERCENTILE, PX_ID, SVI_percentile, ADI_percentile, dci_percentile),
+df_cand_kipa_w_scores <- left_join(df_cand_kipa, select(cand_zip, SVM_SCORE, SVM_PERCENTILE, PX_ID, SVI_percentile,  dci_percentile),
                               by = c("PX_ID" = "PX_ID"))
 
 n_distinct(df_cand_kipa_w_scores$PX_ID)
@@ -464,20 +436,17 @@ n_distinct(df_cand_kipa_w_scores$PX_ID)
 df_cand_kipa_w_scores <- df_cand_kipa_w_scores %>%
   mutate(SVM_PERCENTILE = as.numeric(as.character(SVM_PERCENTILE)),
          SVI_percentile = as.numeric(as.character(SVI_percentile)),
-         ADI_percentile = as.numeric(as.character(ADI_percentile)),
          dci_percentile = as.numeric(as.character(dci_percentile)))
 
 df_cand_kipa_w_scores <- df_cand_kipa_w_scores %>% 
   group_by(PX_ID) %>% ##why group by PX_ID? shouldn't they all be unique?
   mutate(SVM_decile = cut(SVM_PERCENTILE, c(-Inf, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100), labels = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10")),
                                                                     SVI_decile = cut(SVI_percentile, c(-Inf, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100), labels = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10")),
-                                                                    ADI_decile = cut(ADI_percentile,c(-Inf, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100), labels = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10")),
-                                                                    DCI_decile = cut(dci_percentile,c(-Inf, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100), labels = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10")))
+                                                             DCI_decile = cut(dci_percentile,c(-Inf, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100), labels = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10")))
 
 df_cand_kipa_w_scores <- df_cand_kipa_w_scores %>%
   mutate(svm_decile = as.numeric(SVM_decile),
         svi_decile = as.numeric(SVI_decile),
-        adi_decile = as.numeric(ADI_decile),
         dci_decile = as.numeric(DCI_decile))
 
 ```
@@ -701,22 +670,21 @@ missing_summary <- function(data,  label) {
 
 # Creating summaries for each index
 svi_summary <- missing_summary(df_cand_kipa_w_scores %>% filter(is.na(SVI_decile)), "SVI")
-adi_summary <- missing_summary(df_cand_kipa_w_scores %>% filter(is.na(ADI_decile)), "ADI")
 svm_summary <- missing_summary(df_cand_kipa_w_scores %>% filter(is.na(SVM_decile)), "SVM")
 dci_summary <- missing_summary(df_cand_kipa_w_scores %>% filter(is.na(DCI_decile)), "DCI")
-non_missing_summary <- missing_summary(df_cand_kipa_w_scores %>% filter(!is.na(SVI_decile) & !is.na(ADI_decile) & !is.na(SVM_decile) & !is.na(DCI_decile)), "No Missing")
+non_missing_summary <- missing_summary(df_cand_kipa_w_scores %>% filter(!is.na(SVI_decile) & !is.na(SVM_decile) & !is.na(DCI_decile)), "No Missing")
 
 
 # Combining all tables into one
 combined_summary <- tbl_merge(
-  list(non_missing_summary, svi_summary, adi_summary, svm_summary, dci_summary),
-  tab_spanner = c("**No Missing**", "**SVI**", "**ADI**", "**SVM**", "**DCI**")
+  list(non_missing_summary, svi_summary,  svm_summary, dci_summary),
+  tab_spanner = c("**No Missing**", "**SVI**",  "**SVM**", "**DCI**")
 )
 
 # Display the combined summary
 combined_summary
 
-df_cand_kipa_w_scores %>% filter(!is.na(SVI_decile) & !is.na(ADI_decile) & !is.na(SVM_decile) & !is.na(DCI_decile))
+df_cand_kipa_w_scores %>% filter(!is.na(SVI_decile) & !is.na(SVM_decile) & !is.na(DCI_decile))
 ```
 
 
@@ -740,7 +708,6 @@ df_cand_kipa_w_scores <- df_cand_kipa_w_scores %>% mutate(
 df_cand_kipa_w_scores <- df_cand_kipa_w_scores %>%
   mutate(SVM_PERCENTILE = as.numeric(as.character(SVM_PERCENTILE)), # SVM
          SVI_percentile = as.numeric(as.character(SVI_percentile)), # SVI
-         ADI_percentile = as.numeric(as.character(ADI_percentile)), # ADI
          dci_percentile = as.numeric(as.character(dci_percentile))) # DCI
 
 # Use median score from transplant center listed at for candidates missing score percentile
@@ -748,11 +715,9 @@ df_cand_kipa_w_scores <- df_cand_kipa_w_scores %>%
   group_by(CAN_LISTING_CTR_CD) %>% # Gather by transplant center
   mutate(median_SVM = median(SVM_PERCENTILE, na.rm = T), # Median SVM of each transplant center
          median_SVI = median(SVI_percentile, na.rm = T), # Median SVI of each transplant center
-         median_ADI = median(ADI_percentile, na.rm = T), # Median ADI of each transplant center
          median_DCI = median(dci_percentile, na.rm = T), # Median DCI of each transplant center
          SVM_PERCENTILE = ifelse(is.na(SVM_PERCENTILE), median_SVM, SVM_PERCENTILE), #conditional to input corresponding composite score value
          SVI_percentile = ifelse(is.na(SVI_percentile), median_SVI, SVI_percentile),  #conditional to input corresponding composite score value
-         ADI_percentile = ifelse(is.na(ADI_percentile), median_ADI, ADI_percentile),  #conditional to input corresponding composite score value
          dci_percentile = ifelse(is.na(dci_percentile), median_DCI, dci_percentile))  #conditional to input corresponding composite score value
 # Split Percentiles into Deciles
 df_cand_kipa_w_scores <- df_cand_kipa_w_scores %>% 
@@ -760,15 +725,15 @@ df_cand_kipa_w_scores <- df_cand_kipa_w_scores %>%
   mutate(SVM_decile = 
            cut(SVM_PERCENTILE, c(-Inf, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100), labels = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10")),
            SVI_decile = cut(SVI_percentile, c(-Inf, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100), labels = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10")),
-           ADI_decile = cut(ADI_percentile,c(-Inf, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100), labels = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10")),
          DCI_decile = cut(dci_percentile,c(-Inf, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100), labels = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10")))
 
 # Turn deciles into factors
 df_cand_kipa_w_scores <- df_cand_kipa_w_scores %>% 
   mutate(SVM_decile = as.factor(SVM_decile),
         SVI_decile = as.factor(SVI_decile),
-        ADI_decile = as.factor(ADI_decile),
         DCI_decile = as.factor(DCI_decile))
+
+df_cand_kipa_w_scores %>% select(SVM_PERCENTILE, SVI_percentile, dci_percentile)
 ```
 
 ```{r}

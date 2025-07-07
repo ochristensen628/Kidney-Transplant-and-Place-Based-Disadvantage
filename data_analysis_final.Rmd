@@ -12,6 +12,7 @@ library(dplyr)
 library(tidyr)
 library(survival)
 library(ggsurvfit)
+library(gtsummary)
 ```
 # Table 1
 
@@ -38,7 +39,6 @@ create_summary <- function(data, decile_var, label) {
 
 # Creating summaries for each index
 svi_summary <- create_summary(df_cand_kipa_w_scores, SVI_decile, "SVI")
-adi_summary <- create_summary(df_cand_kipa_w_scores, ADI_decile, "ADI")
 svm_summary <- create_summary(df_cand_kipa_w_scores, SVM_decile, "SVM")
 dci_summary <- create_summary(df_cand_kipa_w_scores, DCI_decile, "DCI")
 
@@ -57,8 +57,8 @@ overall_summary <- tbl_summary(
 
 # Combining all tables into one
 combined_summary <- tbl_merge(
-  list(overall_summary, svi_summary, adi_summary, svm_summary, dci_summary),
-  tab_spanner = c("**Overall**", "**SVI**", "**ADI**", "**SVM**", "**DCI**")
+  list(overall_summary, svi_summary, svm_summary, dci_summary),
+  tab_spanner = c("**Overall**", "**SVI**",  "**SVM**", "**DCI**")
 )
 
 # Display the combined summary
@@ -66,6 +66,19 @@ combined_summary
 
 
 ```
+
+```{r}
+#race reference change
+df_cand_kipa_w_scores$race_fact <- relevel(factor(df_cand_kipa_w_scores$CAN_RACE_SRTR), ref = "WHITE")
+
+#cause specific hazard controlling for some factors
+coxph(Surv(survival_time, transplant_outcome) ~ SVI_decile + dial_time + CAN_ABO + cpra_score, data = df_cand_kipa_w_scores)
+
+#cause specific hazard for all factors
+coxph(Surv(survival_time, transplant_outcome) ~ SVI_decile + dial_time + CAN_ABO + cpra_score + race_fact + CAN_ETHNICITY_SRTR + CAN_GENDER + insurance, data = df_cand_kipa_w_scores)
+
+```
+
 
 
 
@@ -84,7 +97,6 @@ more_than_3 = df_cand_kipa_w_scores %>% filter(dial_time_bins == "Greater than 3
 ```{r}
 #dataframes for only certain index, deciles 1 and 10
 SVI_reduced = df_cand_kipa_w_scores %>% filter(SVI_decile %in% c(1,10))
-ADI_reduced = df_cand_kipa_w_scores %>% filter(ADI_decile %in% c(1,10))
 SVM_reduced = df_cand_kipa_w_scores %>% filter(SVM_decile %in% c(1,10))
 DCI_reduced = df_cand_kipa_w_scores %>% filter(DCI_decile %in% c(1,10))
 ```
@@ -163,7 +175,13 @@ data %>% filter(dial_time_bins == 'Greater than 3 years' & SVI_decile == 1 & est
 data %>% filter(dial_time_bins == 'Greater than 3 years' & SVI_decile == 10 & estimate >= .5)
 
 ```
+
+
 # Figure 2
+
+
+
+
 
 ```{r}
 # Create data frame
@@ -191,17 +209,7 @@ svi_preemp <- df_cand_kipa_w_scores %>%
   select(SVI_decile, SVI)  # Keep columns of interest
 svi_preemp
 
-## ADI
-adi_preemp <- df_cand_kipa_w_scores %>%
-  group_by(ADI_decile, preemptive_listing) %>% # Group by decile and result
-  summarize(count = n(), .groups = "drop") %>% # Create count column
-  as.data.frame() %>% # Convert to data frame
-  group_by(ADI_decile) %>%
-  mutate(ADI = (count / sum(count)) * 100) %>% # Create percentage column
-  ungroup() %>%
-  filter(preemptive_listing == 1) %>% # Keep only preemptive listing
-  select(ADI_decile, ADI)  # Keep columns of interest
-adi_preemp
+
 
 ## DCI
 dci_preemp <- df_cand_kipa_w_scores %>%
@@ -217,16 +225,16 @@ dci_preemp
 dci_preemp = dci_preemp %>% filter(!is.na(DCI_decile))
 
 # Combine all data sets
-preemp_df <- cbind(svm_preemp, svi_preemp, adi_preemp, dci_preemp) %>% # Bind by columns
-  select(-SVI_decile, -ADI_decile, -DCI_decile) %>% # Remove extra decile columns
+preemp_df <- cbind(svm_preemp, svi_preemp,  dci_preemp) %>% # Bind by columns
+  select(-SVI_decile,-DCI_decile) %>% # Remove extra decile columns
   rename(decile = SVM_decile) # Rename to have single decile column
 preemp_df
 
-rm(svm_preemp, svi_preemp, adi_preemp, dci_preemp) # Remove intermediate data frames
+rm(svm_preemp, svi_preemp,dci_preemp) # Remove intermediate data frames
 
 # Reshape data
 preemp_df <- preemp_df %>% 
-  pivot_longer(cols = c(SVM, SVI, ADI, DCI), # Turn the data for easier graphing 
+  pivot_longer(cols = c(SVM, SVI, DCI), # Turn the data for easier graphing 
                names_to = "index", # Set name of columns to "index"
                values_to = "percent") # Set value of columns to "percent"
 
@@ -275,11 +283,7 @@ svi_dialysis <- df_cand_kipa_w_scores %>% # Create data frame for SVI Decile v. 
   summarize(SVI = dialysis_time_at_list) # Calculate median
 svi_dialysis # view
 
-# ADI
-adi_dialysis <- df_cand_kipa_w_scores %>% # Create data frame for ADI Decile v. Dialysis Time
-  group_by(ADI_decile) %>% # Group by decile
-  summarize(ADI = dialysis_time_at_list) # Calculate median
-adi_dialysis # view
+
 
 # DCI
 dci_dialysis <- df_cand_kipa_w_scores %>% # Create data frame for DCI Decile v. Dialysis Time
@@ -288,16 +292,16 @@ dci_dialysis <- df_cand_kipa_w_scores %>% # Create data frame for DCI Decile v. 
 dci_dialysis # view
 
 # Join data frames
-dialysis_v_decile <- bind_cols(svm_dialysis, svi_dialysis, adi_dialysis, dci_dialysis) %>% # Combine all data
+dialysis_v_decile <- bind_cols(svm_dialysis, svi_dialysis,  dci_dialysis) %>% # Combine all data
   mutate(decile = SVM_decile) %>% # Change one decile column to "decile"
-  select(-SVM_decile, -SVI_decile, -ADI_decile, -DCI_decile) # Remove other decile columns
+  select(-SVM_decile, -SVI_decile, -DCI_decile) # Remove other decile columns
 dialysis_v_decile
 
-rm(svm_dialysis, svi_dialysis, adi_dialysis, dci_dialysis) # Remove intermediate data frames
+rm(svm_dialysis, svi_dialysis, dci_dialysis) # Remove intermediate data frames
 
 # Reshape data frame
 dialysis_v_decile <- dialysis_v_decile %>%
-  pivot_longer(cols = c(SVM, SVI, ADI, DCI), # Select columns
+  pivot_longer(cols = c(SVM, SVI,  DCI), # Select columns
                names_to = "index", # Name of columns to "index"
                values_to = "dialysis_time") # values of column to "dialysis_time
 
@@ -565,95 +569,7 @@ cuminc_obj <- tidycmprsk::cuminc(Surv(time = time, event = as.factor(status)) ~ 
                                  data = DCI_reduced)
 cuminc_obj
 ```
-# Efigure 7
 
-```{r}
-
-cuminc_obj <- tidycmprsk::cuminc(Surv(time = time, event = as.factor(status)) ~ ADI_decile,
-                                 data = df_cand_kipa_w_scores)
-
-
-data = cuminc_obj$tidy %>% filter(outcome == 'LDKT')
-
-ggplot(data, aes(x = time/365.25, y = estimate, color = strata)) +
-  geom_line() +  # Adjust line thickness
-  theme_bw() + 
-  scale_y_continuous(limits = c(0,1)) +
-  scale_color_manual(values = blue_palette) +
-  labs(color = "ADI Decile", 
-       x = "Years on Waitlist",
-         y = "Cumulative Incidence",
-         title = "Cumulative incidence of LDKT - ADI") +
-  theme(
-    text = element_text(size = 14, family = "sans", face = "plain"),  # global font size & no bold
-    plot.title = element_text(size = 16, face = "plain", hjust = 0.5),  # larger title, centered
-    axis.title = element_text(size = 14, face = "plain"),
-    axis.text = element_text(size = 12, face = "plain"),
-    legend.title = element_text(size = 13, face = "plain"),
-    legend.text = element_text(size = 12, face = "plain")
-  )
-  
-ggsave("ldkt_ADI.png", width = 10, height = 7, dpi = 400)
-
-cuminc_obj <- tidycmprsk::cuminc(Surv(time = time, event = as.factor(status)) ~ ADI_decile,
-                                 data = ADI_reduced)
-cuminc_obj
-```
-
-  
 
 # Credit to Alex Wang for Efigure 8. Source code for that figure can be found at https://github.com/Healthcare-Allocation-Lab/SDoH-Score-Comparison-Heart-/blob/main/Supplemental%20Figure%201%3A%20Chicago%20plots.Rmd
 
-
-# Efigure 9a
-
-```{r}
-cuminc_obj <- tidycmprsk::cuminc(Surv(time = time, event = as.factor(status)) ~ ADI_decile, 
-                                 data = ADI_reduced)
-data = cuminc_obj$tidy %>% filter(strata == 1)
-
-ggplot(data, aes(x = time/365.25, y = estimate, color = outcome))+
-  geom_line() +  # Adjust line thickness
-  theme_bw() + 
-  scale_y_continuous(limits = c(0,1)) +
-  labs(color = "Outcome",
-       x = "Years on Waitlist",
-         y = "Cumulative Incidence",
-         title = "Cumulative incidence of each outcome ADI Decile 1") +
-  theme(
-    text = element_text(size = 14, family = "sans", face = "plain"),  # global font size & no bold
-    plot.title = element_text(size = 16, face = "plain", hjust = 0.5),  # larger title, centered
-    axis.title = element_text(size = 14, face = "plain"),
-    axis.text = element_text(size = 12, face = "plain"),
-    legend.title = element_text(size = 13, face = "plain"),
-    legend.text = element_text(size = 12, face = "plain")
-  )
-
-  ggsave("ADI_outcomes_1.png", width = 10, height = 7, dpi = 400)
-```
-# Efigure 9b
-
-```{r}
-cuminc_obj <- tidycmprsk::cuminc(Surv(time = time, event = as.factor(status)) ~ ADI_decile, 
-                                 data = ADI_reduced)
-data = cuminc_obj$tidy %>% filter(strata == 10)
-
-ggplot(data, aes(x = time/365.25, y = estimate, color = outcome))+
-  geom_line() +  # Adjust line thickness
-  theme_bw() + 
-  scale_y_continuous(limits = c(0,1)) +
-  labs(color = "Outcome",
-       x = "Years on Waitlist",
-         y = "Cumulative Incidence",
-         title = "Cumulative incidence of each outcome ADI Decile 10") +
-  theme(
-    text = element_text(size = 14, family = "sans", face = "plain"),  # global font size & no bold
-    plot.title = element_text(size = 16, face = "plain", hjust = 0.5),  # larger title, centered
-    axis.title = element_text(size = 14, face = "plain"),
-    axis.text = element_text(size = 12, face = "plain"),
-    legend.title = element_text(size = 13, face = "plain"),
-    legend.text = element_text(size = 12, face = "plain")
-  )
-
-  ggsave("ADI_outcomes_10.png", width = 10, height = 7, dpi = 400)
-```
